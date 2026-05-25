@@ -1,0 +1,276 @@
+# Known MCP server registry.
+#
+# Each entry maps a server name (as it appears in mcpServers config keys) to:
+#   tools           — the tool functions the server exposes
+#   classification  — injection-vector tags driving coercion inference
+#   provider        — the upstream system this server authenticates to
+#
+# Classification taxonomy:
+#   Sources (tools that pull untrusted content into agent context):
+#     url_fetcher    — pulls remote content of unknown origin
+#     rag_retriever  — returns indexed docs that may be poisoned
+#     mail_reader    — classic indirect-prompt-injection vector
+#     file_reader    — returns file content that may be untrusted
+#
+#   Sinks (tools an agent can be steered into invoking):
+#     shell_executor — runs commands the agent decides on
+#     code_writer    — writes code that will execute
+#     cloud_mutator  — mutates cloud or SaaS state
+#     query_runner   — reads-then-writes (both source and sink)
+#
+# Extending: add entries here or supply a second registry via --known-servers
+# on the CLI. The CLI-supplied file overrides this default on key collision.
+
+servers:
+
+  # Anthropic reference servers (modelcontextprotocol/servers)
+  filesystem:
+    tools: [read_file, write_file, list_directory, search_files, move_file, create_directory]
+    classification: [file_reader, code_writer]
+    provider: local_fs
+
+  git:
+    tools: [git_status, git_diff, git_log, git_commit, git_create_branch, git_checkout, git_show]
+    classification: [file_reader, code_writer]
+    provider: local_git
+
+  github:
+    tools: [search_repos, get_file_contents, create_issue, create_pull_request, create_or_update_file, list_commits, get_issue, list_issues]
+    classification: [rag_retriever, code_writer, cloud_mutator]
+    provider: github
+
+  gitlab:
+    tools: [search_repositories, get_file_contents, create_or_update_file, create_merge_request, create_issue]
+    classification: [rag_retriever, code_writer, cloud_mutator]
+    provider: gitlab
+
+  slack:
+    tools: [search_messages, post_message, list_channels, get_channel_history, get_users, get_user_profile]
+    classification: [mail_reader, cloud_mutator]
+    provider: slack
+
+  brave-search:
+    tools: [brave_web_search, brave_local_search]
+    classification: [url_fetcher, rag_retriever]
+    provider: brave
+
+  fetch:
+    tools: [fetch]
+    classification: [url_fetcher, rag_retriever]
+    provider: web
+
+  puppeteer:
+    tools: [puppeteer_navigate, puppeteer_screenshot, puppeteer_click, puppeteer_fill, puppeteer_evaluate]
+    classification: [url_fetcher, shell_executor]
+    provider: web
+
+  postgres:
+    tools: [query, list_tables, describe_table]
+    classification: [query_runner, cloud_mutator]
+    provider: postgres
+
+  sqlite:
+    tools: [read_query, write_query, create_table, list_tables, describe_table]
+    classification: [query_runner, code_writer]
+    provider: sqlite
+
+  memory:
+    tools: [create_entities, create_relations, add_observations, delete_entities, search_nodes, read_graph]
+    classification: [rag_retriever]
+    provider: local_memory
+
+  google-drive:
+    tools: [search, read_file, gdrive_search, gdrive_read_file]
+    classification: [rag_retriever, file_reader]
+    provider: google
+
+  google-maps:
+    tools: [maps_geocode, maps_search_places, maps_place_details, maps_directions]
+    classification: [url_fetcher, rag_retriever]
+    provider: google
+
+  sentry:
+    tools: [get_sentry_issue, list_issues, list_project_events]
+    classification: [rag_retriever, mail_reader]
+    provider: sentry
+
+  everart:
+    tools: [generate_image]
+    classification: [url_fetcher]
+    provider: everart
+
+  # Common community servers
+  notion:
+    tools: [search, query_database, retrieve_page, create_page, update_page, append_block_children]
+    classification: [rag_retriever, code_writer, cloud_mutator]
+    provider: notion
+
+  linear:
+    tools: [list_issues, create_issue, update_issue, list_projects, list_teams]
+    classification: [rag_retriever, cloud_mutator]
+    provider: linear
+
+  jira:
+    tools: [jql_search, get_issue, create_issue, update_issue, add_comment, transition_issue]
+    classification: [rag_retriever, mail_reader, cloud_mutator]
+    provider: atlassian
+
+  confluence:
+    tools: [search, get_page, create_page, update_page, get_space]
+    classification: [rag_retriever, mail_reader, cloud_mutator]
+    provider: atlassian
+
+  salesforce:
+    tools: [soql_query, sosl_search, get_record, create_record, update_record, describe_object]
+    classification: [query_runner, cloud_mutator]
+    provider: salesforce
+
+  hubspot:
+    tools: [search_contacts, get_contact, create_contact, update_contact, list_deals]
+    classification: [rag_retriever, cloud_mutator]
+    provider: hubspot
+
+  asana:
+    tools: [list_tasks, get_task, create_task, update_task, list_projects]
+    classification: [rag_retriever, cloud_mutator]
+    provider: asana
+
+  airtable:
+    tools: [list_records, get_record, create_record, update_record, search_records]
+    classification: [query_runner, cloud_mutator]
+    provider: airtable
+
+  stripe:
+    tools: [create_customer, list_customers, create_payment_intent, list_charges, retrieve_subscription]
+    classification: [cloud_mutator, rag_retriever]
+    provider: stripe
+
+  aws:
+    tools: [list_buckets, get_object, put_object, list_objects, describe_instances, run_instances]
+    classification: [rag_retriever, cloud_mutator, file_reader]
+    provider: aws
+
+  azure:
+    tools: [list_resources, get_resource, deploy_template, list_subscriptions]
+    classification: [rag_retriever, cloud_mutator]
+    provider: azure
+
+  gcp:
+    tools: [list_projects, list_instances, run_query, list_buckets]
+    classification: [rag_retriever, cloud_mutator]
+    provider: gcp
+
+  kubernetes:
+    tools: [list_pods, get_pod, exec_in_pod, list_namespaces, apply_manifest]
+    classification: [rag_retriever, cloud_mutator, shell_executor]
+    provider: kubernetes
+
+  terraform:
+    tools: [plan, apply, destroy, show, state_list]
+    classification: [cloud_mutator, code_writer]
+    provider: hashicorp
+
+  vault:
+    tools: [read_secret, write_secret, list_secrets, delete_secret]
+    classification: [rag_retriever, cloud_mutator]
+    provider: hashicorp_vault
+
+  cloudflare:
+    tools: [list_zones, list_dns_records, create_dns_record, list_workers, deploy_worker]
+    classification: [cloud_mutator, code_writer]
+    provider: cloudflare
+
+  docker:
+    tools: [list_containers, run_container, exec_container, build_image, list_images]
+    classification: [cloud_mutator, shell_executor]
+    provider: docker
+
+  shell:
+    tools: [run_command, execute]
+    classification: [shell_executor]
+    provider: local_shell
+
+  e2b:
+    tools: [run_code, run_command, upload_file, download_file]
+    classification: [shell_executor, code_writer, file_reader]
+    provider: e2b
+
+  obsidian:
+    tools: [search, read_note, create_note, update_note, list_notes]
+    classification: [rag_retriever, file_reader, code_writer]
+    provider: obsidian
+
+  gmail:
+    tools: [search_messages, read_message, send_message, list_labels]
+    classification: [mail_reader, cloud_mutator]
+    provider: google
+
+  outlook:
+    tools: [search_messages, read_message, send_message, list_folders]
+    classification: [mail_reader, cloud_mutator]
+    provider: microsoft
+
+  exa:
+    tools: [search, find_similar, get_contents]
+    classification: [url_fetcher, rag_retriever]
+    provider: exa
+
+  perplexity:
+    tools: [ask, search]
+    classification: [url_fetcher, rag_retriever]
+    provider: perplexity
+
+  tavily:
+    tools: [search, extract]
+    classification: [url_fetcher, rag_retriever]
+    provider: tavily
+
+  firecrawl:
+    tools: [scrape, crawl, search, extract]
+    classification: [url_fetcher, rag_retriever]
+    provider: firecrawl
+
+  pinecone:
+    tools: [query, upsert, fetch, delete]
+    classification: [rag_retriever, cloud_mutator]
+    provider: pinecone
+
+  weaviate:
+    tools: [query, get, create, delete]
+    classification: [rag_retriever, cloud_mutator]
+    provider: weaviate
+
+  chroma:
+    tools: [query, add, get, delete, list_collections]
+    classification: [rag_retriever, cloud_mutator]
+    provider: chroma
+
+  redis:
+    tools: [get, set, del, keys, scan]
+    classification: [query_runner, cloud_mutator]
+    provider: redis
+
+  mongodb:
+    tools: [find, insert, update, delete, aggregate]
+    classification: [query_runner, cloud_mutator]
+    provider: mongodb
+
+  mysql:
+    tools: [query, list_tables, describe_table]
+    classification: [query_runner, cloud_mutator]
+    provider: mysql
+
+  bigquery:
+    tools: [query, list_datasets, list_tables, get_schema]
+    classification: [query_runner, rag_retriever]
+    provider: gcp
+
+  snowflake:
+    tools: [query, list_schemas, list_tables]
+    classification: [query_runner, rag_retriever]
+    provider: snowflake
+
+  databricks:
+    tools: [run_sql, list_clusters, run_notebook, list_workspaces]
+    classification: [query_runner, code_writer, cloud_mutator]
+    provider: databricks
