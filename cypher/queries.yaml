@@ -1,0 +1,86 @@
+# AgentHound Cypher query library.
+#
+# Each query is a YAML record with:
+#   id: short snake_case identifier
+#   title: human label
+#   description: what the query answers
+#   risk_category: how to think about results
+#   cypher: the actual query
+#
+# Drop into BloodHound CE's Explore → Cypher tab.
+
+queries:
+
+  - id: production_blast_radius_from_injection
+    title: Production blast radius from any injectable input
+    description: >
+      For every untrusted-content source that can coerce an agent, find every
+      production resource reachable in up to four tool-call hops. The headline
+      demo query.
+    risk_category: critical
+    cypher: |
+      MATCH path = (i:InjectableInput)-[:COERCES]->(a:Agent)
+             -[:CALLS_TOOL*1..4]->(t:MCPTool)
+             -[:AUTHENTICATES_AS]->(n:NHI)
+             -[:GRANTS_ACCESS]->(r:Resource)
+      WHERE r.tier = 'production'
+      RETURN path, length(path) AS hops
+      ORDER BY hops ASC
+      LIMIT 25
+
+  - id: agents_with_excessive_tool_surface
+    title: Agents with broadest reachable tool surface
+    description: >
+      Counts the number of distinct MCP tools each agent can call. Outliers
+      are the agents with the largest blast radius — usually the ones with
+      every MCP server enabled by default.
+    risk_category: hygiene
+    cypher: |
+      MATCH (a:Agent)-[:CALLS_TOOL]->(t:MCPTool)
+      RETURN a.name AS agent, count(DISTINCT t) AS tool_count
+      ORDER BY tool_count DESC
+      LIMIT 20
+
+  - id: indirect_injection_to_cloud_mutator
+    title: Indirect-injection paths to cloud-mutating tools
+    description: >
+      Indirect injection (poisoned README, malicious email, planted Jira
+      comment) is the highest-impact vector because the user does not realize
+      they are introducing attacker content. This query surfaces every chain
+      that ends in a cloud-mutating sink.
+    risk_category: critical
+    cypher: |
+      MATCH (i:InjectableInput)-[c:COERCES]->(a:Agent)
+            -[:ESCALATES_VIA]->(t:MCPTool)
+      WHERE c.injection_class = 'indirect'
+        AND any(tag IN t.classification WHERE tag = 'cloud_mutator')
+      RETURN i.name AS source, a.name AS agent, t.name AS sink_tool
+
+  - id: orphaned_nhis_with_production_access
+    title: NHIs the runtime can read but no agent currently uses
+    description: >
+      Credentials sitting on the developer machine that are reachable but no
+      currently-installed agent has been configured to use them. These are
+      classic "ghost access" cases — high-value cleanup targets for the blue
+      team.
+    risk_category: hygiene
+    cypher: |
+      MATCH (rt:AgentRuntime)-[:CAN_READ_CRED]->(n:NHI)
+            -[:GRANTS_ACCESS]->(r:Resource {tier: 'production'})
+      WHERE NOT EXISTS {
+        MATCH (a:Agent)-[:RUNS_AS]->(rt)
+        MATCH (a)-[:CALLS_TOOL]->(:MCPTool)-[:AUTHENTICATES_AS]->(n)
+      }
+      RETURN rt.name, n.name, r.name
+
+  - id: shadow_mcp_servers
+    title: Unclassified MCP servers (potential shadow IT)
+    description: >
+      MCP servers that did not match the known-server registry. These are
+      either novel third-party servers (likely benign) or unsanctioned ones
+      configured by individual developers. Worth manual review either way.
+    risk_category: hygiene
+    cypher: |
+      MATCH (s:MCPServer)-[:EXPOSES]->(t:MCPTool)
+      WHERE any(c IN t.classification WHERE c = 'unclassified')
+      RETURN s.name AS server, s.config_source AS config_path

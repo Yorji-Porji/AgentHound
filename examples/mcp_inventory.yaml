@@ -1,0 +1,73 @@
+# Example MCP server inventory for `agenthound mcp --input <this file>`.
+#
+# Use this when you're auditing a target's MCP fleet from documentation
+# rather than scanning a live developer machine. Each server entry describes
+# its transport, tool surface, the backing NHI, and the resources reachable
+# through that NHI.
+
+servers:
+
+  - name: salesforce-mcp
+    transport: http
+    url: https://mcp.example.internal/salesforce
+    provider: salesforce
+    tools:
+      - name: search_records
+        classification: [rag_retriever, query_runner]
+      - name: read_record
+        classification: [rag_retriever]
+      - name: update_record
+        classification: [cloud_mutator]
+      - name: create_record
+        classification: [cloud_mutator]
+    backing_nhi:
+      provider: salesforce
+      identifier: oauth_app_marketing
+      nhi_type: oauth_app
+    accessible_resources:
+      - provider: salesforce
+        kind: object
+        identifier: Account
+        tier: production
+      - provider: salesforce
+        kind: object
+        identifier: Opportunity
+        tier: production
+      - provider: salesforce
+        kind: object
+        identifier: Contact
+        tier: production
+
+  - name: internal-rag
+    transport: stdio
+    provider: internal
+    tools:
+      - name: retrieve
+        classification: [rag_retriever]
+    backing_nhi:
+      provider: internal
+      identifier: rag_index_eng_docs
+      nhi_type: service_account
+    accessible_resources:
+      - provider: internal
+        kind: index
+        identifier: engineering_docs
+        tier: production
+
+  - name: prod-deploy
+    transport: stdio
+    provider: aws
+    tools:
+      - name: apply_terraform
+        classification: [cloud_mutator, code_writer]
+      - name: read_plan
+        classification: [file_reader]
+    backing_nhi:
+      provider: aws
+      identifier: prod-deploy-role
+      nhi_type: assumed_role
+    accessible_resources:
+      - provider: aws
+        kind: account
+        identifier: "111122223333"
+        tier: production
