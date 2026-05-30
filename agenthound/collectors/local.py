@@ -63,7 +63,9 @@ def _load_registry(path: Path | None = None) -> dict[str, dict[str, Any]]:
 
 # Agent kinds AgentHound knows how to find. Exposed so the CLI can list them.
 AGENT_KINDS = frozenset({"cursor", "claude_desktop", "claude_code", "vscode", "zed"})
-CRED_PROVIDERS = frozenset({"aws", "github", "ssh", "kubernetes", "npm", "docker", "gcloud", "azure"})
+CRED_PROVIDERS = frozenset(
+    {"aws", "github", "ssh", "kubernetes", "npm", "docker", "gcloud", "azure"}
+)
 
 
 # --- Agent install fingerprints -----------------------------------------------
@@ -117,12 +119,14 @@ def _mcp_config_paths(home: Path) -> list[tuple[str, Path]]:
     adopted by Cursor and Claude Code as well, so the same parser handles
     all three.
     """
+    mac = home / "Library" / "Application Support"
+    roaming = home / "AppData" / "Roaming"
     return [
-        ("claude_desktop", home / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"),
+        ("claude_desktop", mac / "Claude" / "claude_desktop_config.json"),
         ("claude_desktop", home / ".config" / "Claude" / "claude_desktop_config.json"),
-        ("claude_desktop", home / "AppData" / "Roaming" / "Claude" / "claude_desktop_config.json"),
+        ("claude_desktop", roaming / "Claude" / "claude_desktop_config.json"),
         ("cursor", home / ".cursor" / "mcp.json"),
-        ("cursor", home / "Library" / "Application Support" / "Cursor" / "User" / "globalStorage" / "mcp.json"),
+        ("cursor", mac / "Cursor" / "User" / "globalStorage" / "mcp.json"),
         ("claude_code", home / ".claude" / "mcp.json"),
         ("vscode", home / ".vscode" / "mcp.json"),
     ]
@@ -471,7 +475,9 @@ class LocalCollector(Collector):
             ("azure", self.home / ".azure" / "azureProfile.json"),
         ]:
             if marker.exists():
-                nhi = nhi_node(provider=provider, identifier="default", nhi_type=f"{provider}_default")
+                nhi = nhi_node(
+                    provider=provider, identifier="default", nhi_type=f"{provider}_default"
+                )
                 result.nodes.append(nhi)
                 result.edges.append(
                     Edge(

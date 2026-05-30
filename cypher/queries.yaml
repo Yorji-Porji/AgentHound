@@ -8,6 +8,13 @@
 #   cypher: the actual query
 #
 # Drop into BloodHound CE's Explore → Cypher tab.
+#
+# IMPORTANT — kind names are PascalCase here, matching what AgentHound *emits*,
+# not the SCREAMING_SNAKE internal enum values. The exporter sanitizes kinds on
+# emission, so the graph in BloodHound uses: Coerces, CallsTool, Exposes,
+# AuthenticatesAs, GrantsAccess, CanReadCred, RunsAs, EscalatesVia — and the NHI
+# node kind is emitted as `Nhi`. Querying with the internal names (:COERCES,
+# :NHI, …) matches nothing.
 
 queries:
 
@@ -19,10 +26,10 @@ queries:
       demo query.
     risk_category: critical
     cypher: |
-      MATCH path = (i:InjectableInput)-[:COERCES]->(a:Agent)
-             -[:CALLS_TOOL*1..4]->(t:MCPTool)
-             -[:AUTHENTICATES_AS]->(n:NHI)
-             -[:GRANTS_ACCESS]->(r:Resource)
+      MATCH path = (i:InjectableInput)-[:Coerces]->(a:Agent)
+             -[:CallsTool*1..4]->(t:MCPTool)
+             -[:AuthenticatesAs]->(n:Nhi)
+             -[:GrantsAccess]->(r:Resource)
       WHERE r.tier = 'production'
       RETURN path, length(path) AS hops
       ORDER BY hops ASC
@@ -36,7 +43,7 @@ queries:
       every MCP server enabled by default.
     risk_category: hygiene
     cypher: |
-      MATCH (a:Agent)-[:CALLS_TOOL]->(t:MCPTool)
+      MATCH (a:Agent)-[:CallsTool]->(t:MCPTool)
       RETURN a.name AS agent, count(DISTINCT t) AS tool_count
       ORDER BY tool_count DESC
       LIMIT 20
@@ -50,8 +57,8 @@ queries:
       that ends in a cloud-mutating sink.
     risk_category: critical
     cypher: |
-      MATCH (i:InjectableInput)-[c:COERCES]->(a:Agent)
-            -[:ESCALATES_VIA]->(t:MCPTool)
+      MATCH (i:InjectableInput)-[c:Coerces]->(a:Agent)
+            -[:EscalatesVia]->(t:MCPTool)
       WHERE c.injection_class = 'indirect'
         AND any(tag IN t.classification WHERE tag = 'cloud_mutator')
       RETURN i.name AS source, a.name AS agent, t.name AS sink_tool
@@ -65,11 +72,11 @@ queries:
       team.
     risk_category: hygiene
     cypher: |
-      MATCH (rt:AgentRuntime)-[:CAN_READ_CRED]->(n:NHI)
-            -[:GRANTS_ACCESS]->(r:Resource {tier: 'production'})
+      MATCH (rt:AgentRuntime)-[:CanReadCred]->(n:Nhi)
+            -[:GrantsAccess]->(r:Resource {tier: 'production'})
       WHERE NOT EXISTS {
-        MATCH (a:Agent)-[:RUNS_AS]->(rt)
-        MATCH (a)-[:CALLS_TOOL]->(:MCPTool)-[:AUTHENTICATES_AS]->(n)
+        MATCH (a:Agent)-[:RunsAs]->(rt)
+        MATCH (a)-[:CallsTool]->(:MCPTool)-[:AuthenticatesAs]->(n)
       }
       RETURN rt.name, n.name, r.name
 
@@ -81,6 +88,6 @@ queries:
       configured by individual developers. Worth manual review either way.
     risk_category: hygiene
     cypher: |
-      MATCH (s:MCPServer)-[:EXPOSES]->(t:MCPTool)
+      MATCH (s:MCPServer)-[:Exposes]->(t:MCPTool)
       WHERE any(c IN t.classification WHERE c = 'unclassified')
       RETURN s.name AS server, s.config_source AS config_path

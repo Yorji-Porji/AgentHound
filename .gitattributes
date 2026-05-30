@@ -1,0 +1,13 @@
+# Normalize line endings: store text as LF in the repository regardless of the
+# platform a contributor checks out on. Prevents CRLF churn from Windows clones.
+* text=auto eol=lf
+
+# Shell scripts must stay LF — CRLF breaks them on Linux/macOS.
+*.sh text eol=lf
+
+# Explicitly mark structured text formats.
+*.py   text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+*.md   text eol=lf

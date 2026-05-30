@@ -1,0 +1,111 @@
+{
+  "title": "Generic Ingest Edge",
+  "description": "An edge used in a generic graph ingestion system. Each edge has a `kind` describing the relationship, and `start`/`end` node-match criteria that resolve the endpoints. Edges may also include a `properties` object containing custom attributes.",
+  "type": "object",
+  "$defs": {
+    "property_map": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "A key-value map of entity attributes. Values must not be objects. If a value is an array, it must contain only primitive types (e.g., strings, numbers, booleans) and must be homogeneous (all items must be of the same type).",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "array",
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "items": {
+                  "type": "number"
+                }
+              },
+              {
+                "items": {
+                  "type": "boolean"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "not": {
+        "required": [
+          "objectid"
+        ]
+      }
+    },
+    "node_match_criteria": {
+      "type": "object",
+      "description": "Criteria for resolving an edge endpoint to a node. `value` holds the identifier; `match_by` selects whether it is matched against a node's `id` or `name`.",
+      "properties": {
+        "value": {
+          "type": "string"
+        },
+        "match_by": {
+          "type": "string",
+          "enum": [
+            "id",
+            "name"
+          ]
+        },
+        "kind": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "match_by"
+      ]
+    }
+  },
+  "properties": {
+    "kind": {
+      "type": "string",
+      "description": "The relationship type. Should match the pattern ^[A-Za-z0-9_]+$ so it survives BloodHound's kind post-processing."
+    },
+    "start": {
+      "$ref": "#/$defs/node_match_criteria"
+    },
+    "end": {
+      "$ref": "#/$defs/node_match_criteria"
+    },
+    "properties": {
+      "$ref": "#/$defs/property_map"
+    }
+  },
+  "required": [
+    "kind",
+    "start",
+    "end"
+  ],
+  "examples": [
+    {
+      "kind": "RunsAs",
+      "start": {
+        "value": "AH-Agent-abc123",
+        "match_by": "id"
+      },
+      "end": {
+        "value": "AH-AgentRuntime-def456",
+        "match_by": "id"
+      },
+      "properties": {
+        "is_coercion": false
+      }
+    }
+  ]
+}

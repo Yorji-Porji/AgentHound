@@ -1,0 +1,42 @@
+{
+  "metadata": {
+    "source_kind": "AgentHound",
+    "schema_version": "0.2.0",
+    "generated_at": "2026-05-29T03:00:00+00:00",
+    "tool": "agenthound-v0.2.0",
+    "node_count": 2,
+    "edge_count": 1
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "AH-Agent-abc123",
+        "kinds": ["Agent", "AgentHound"],
+        "properties": {
+          "name": "cursor@host",
+          "stable_id": "cursor:cursor@host",
+          "agent_kind": "cursor"
+        }
+      },
+      {
+        "id": "AH-AgentRuntime-def456",
+        "kinds": ["AgentRuntime", "AgentHound"],
+        "properties": {
+          "name": "host",
+          "stable_id": "workstation:host",
+          "runtime_kind": "workstation"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "kind": "RunsAs",
+        "start": {"value": "AH-Agent-abc123", "match_by": "id"},
+        "end": {"value": "AH-AgentRuntime-def456", "match_by": "id"},
+        "properties": {
+          "is_coercion": false
+        }
+      }
+    ]
+  }
+}

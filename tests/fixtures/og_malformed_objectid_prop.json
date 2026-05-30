@@ -1,0 +1,8 @@
+{
+  "id": "AH-Agent-objid",
+  "kinds": ["Agent"],
+  "properties": {
+    "name": "objectid is forbidden inside properties",
+    "objectid": "AH-Agent-objid"
+  }
+}

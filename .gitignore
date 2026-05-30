@@ -48,6 +48,9 @@ htmlcov/
 *.swo
 .DS_Store
 
+# Personal planning
+.planning/
+
 # Generated outputs (regenerate with examples/run_demo.sh)
 *.json.tmp
 out/

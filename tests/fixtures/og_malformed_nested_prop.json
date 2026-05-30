@@ -1,0 +1,8 @@
+{
+  "id": "AH-Agent-nested",
+  "kinds": ["Agent"],
+  "properties": {
+    "name": "nested object property is illegal",
+    "config": {"nested": "object"}
+  }
+}

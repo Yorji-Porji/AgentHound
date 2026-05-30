@@ -54,10 +54,10 @@ The existing MCP security tool ecosystem (Snyk agent-scan, Invariant mcp-scan, C
 ## Headline query
 
 ```cypher
-MATCH path = (i:InjectableInput)-[:COERCES]->(a:Agent)
-       -[:CALLS_TOOL*1..4]->(t:MCPTool)
-       -[:AUTHENTICATES_AS]->(n:NHI)
-       -[:GRANTS_ACCESS]->(r:Resource)
+MATCH path = (i:InjectableInput)-[:Coerces]->(a:Agent)
+       -[:CallsTool*1..4]->(t:MCPTool)
+       -[:AuthenticatesAs]->(n:Nhi)
+       -[:GrantsAccess]->(r:Resource)
 WHERE r.tier = 'production'
 RETURN path, length(path) AS hops
 ORDER BY hops ASC
@@ -66,7 +66,13 @@ LIMIT 25
 
 In English: *for any external content source that can reach an agent, walk up to four tool-call hops to find every production resource reachable, shortest path first.*
 
-See `cypher/queries.yaml` for the full query library.
+> **Note on kind names.** The taxonomy tables above use the internal enum names
+> (`COERCES`, `CALLS_TOOL`, `NHI`, …). On emission these are sanitized to the
+> PascalCase form BloodHound expects, so **Cypher must use the emitted names**:
+> `Coerces`, `CallsTool`, `AuthenticatesAs`, `GrantsAccess`, `CanReadCred`,
+> `RunsAs`, `EscalatesVia`, and the `NHI` node kind becomes `Nhi`.
+
+See `cypher/queries.yaml` for the full query library (already in emitted form).
 
 ## Quick start
 
