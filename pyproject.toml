@@ -33,6 +33,8 @@ dev = [
     "pytest-cov>=4.1",
     "ruff>=0.1",
     "mypy>=1.7",
+    "jsonschema>=4.20",
+    "types-PyYAML>=6.0",
 ]
 
 [project.scripts]
@@ -54,3 +56,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
+# UP042: the `class X(str, Enum)` pattern is deliberate — members must be
+# JSON-serializable string values for OpenGraph emission and round-tripping.
+# Migrating to StrEnum is a separate, behavior-sensitive change.
+ignore = ["UP042"]

@@ -75,8 +75,6 @@ class CoercionInferencer:
         """
         derived = CollectionResult()
 
-        nodes_by_id: dict[str, Node] = {n.objectid: n for n in collected.nodes}
-
         # Step 1: propagate CALLS_TOOL across MCPServer boundaries.
         #
         # An agent observed calling any tool of server S can in practice call

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Union
+from typing import Any
 
 
 class PermissionEdgeKind(str, Enum):
@@ -45,7 +45,7 @@ class CoercionEdgeKind(str, Enum):
     ESCALATES_VIA = "ESCALATES_VIA"  # Agent → MCPTool (induced privileged invocation)
 
 
-EdgeKind = Union[PermissionEdgeKind, CoercionEdgeKind]
+EdgeKind = PermissionEdgeKind | CoercionEdgeKind
 
 
 @dataclass

@@ -1,0 +1,8 @@
+{
+  "kind": "RunsAs",
+  "start": "AH-Agent-abc123",
+  "end": "AH-AgentRuntime-def456",
+  "properties": {
+    "is_coercion": false
+  }
+}

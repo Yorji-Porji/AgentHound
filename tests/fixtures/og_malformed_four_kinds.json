@@ -1,0 +1,7 @@
+{
+  "id": "AH-Agent-fourkinds",
+  "kinds": ["Agent", "AgentHound", "Extra", "TooMany"],
+  "properties": {
+    "name": "four kinds exceeds maxItems 3"
+  }
+}

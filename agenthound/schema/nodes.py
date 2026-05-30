@@ -58,7 +58,7 @@ class Node:
     def objectid(self) -> str:
         """Stable, deterministic ID. SHA-1 of `{kind}:{stable_id}`."""
         digest = hashlib.sha1(
-            f"{self.kind.value}:{self.stable_id}".encode("utf-8"), usedforsecurity=False
+            f"{self.kind.value}:{self.stable_id}".encode(), usedforsecurity=False
         ).hexdigest()
         return f"AH-{self.kind.value}-{digest[:16]}"
 

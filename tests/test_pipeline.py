@@ -19,7 +19,6 @@ from agenthound.collectors.mcp import MCPCollector
 from agenthound.inference import CoercionInferencer
 from agenthound.schema import build_payload
 
-
 CLAUDE_DESKTOP_CONFIG = {
     "mcpServers": {
         "filesystem": {
@@ -147,7 +146,7 @@ def test_pipeline_finds_production_blast_radius(synthetic_home: Path, inventory_
                 if tgt in trail:
                     continue
                 new_trail = trail + [tgt]
-                if tgt in prod and ek == "GRANTS_ACCESS":
+                if tgt in prod and ek == "GrantsAccess":
                     found = True
                     break
                 queue.append((tgt, new_trail))
