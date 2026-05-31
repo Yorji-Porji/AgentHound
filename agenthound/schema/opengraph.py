@@ -37,11 +37,19 @@ RESERVED_KINDS = {
 
 @dataclass
 class OpenGraphPayload:
-    """A complete OpenGraph ingestion payload."""
+    """A complete OpenGraph ingestion payload.
+
+    `metadata` is what BloodHound validates on ingest — it is kept strictly to
+    the fields BloodHound allows (currently just `source_kind`). Provenance and
+    counts that used to live in metadata now live in `diagnostics`, which is
+    *not* emitted into the payload (it would fail BloodHound's strict metadata
+    schema). Use it for logging or local reporting instead.
+    """
 
     metadata: dict[str, Any] = field(default_factory=dict)
     nodes: list[dict[str, Any]] = field(default_factory=list)
     edges: list[dict[str, Any]] = field(default_factory=list)
+    diagnostics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -243,19 +251,27 @@ def build_payload(
         if result is not None
     ]
 
-    metadata = {
+    # BloodHound's ingest metadata schema is strict (additionalProperties: false)
+    # and currently permits exactly ONE optional field: `source_kind`. Emitting
+    # anything else (counts, timestamps, tool/version) fails validation on
+    # upload, so those live in `diagnostics` on the payload object instead —
+    # they are never written into the emitted JSON. See schemas/metadata.json.
+    metadata: dict[str, Any] = {}
+    if not strip_branding:
+        metadata["source_kind"] = SOURCE_KIND
+
+    diagnostics: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "generated_at": datetime.now(UTC).isoformat(),
         "node_count": len(serialized_nodes),
         "edge_count": len(serialized_edges),
     }
-
     if not strip_branding:
-        metadata["source_kind"] = SOURCE_KIND
-        metadata["tool"] = f"agenthound-v{SCHEMA_VERSION}"
+        diagnostics["tool"] = f"agenthound-v{SCHEMA_VERSION}"
 
     return OpenGraphPayload(
         metadata=metadata,
         nodes=serialized_nodes,
         edges=serialized_edges,
+        diagnostics=diagnostics,
     )

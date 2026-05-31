@@ -204,13 +204,53 @@ def test_og17_no_branding_drops_tool(native_graph_min):
     assert "source_kind" not in payload["metadata"]
 
 
-def test_og18_branding_on_keeps_prefix_and_tool(native_graph_min):
-    """OG-18: branding on (default) keeps AH- prefix, source kind, and tool."""
+def test_og18_branding_on_keeps_prefix_and_source_kind(native_graph_min):
+    """OG-18: branding on (default) keeps the AH- id prefix and the AgentHound
+    source kind on nodes, and sets metadata.source_kind.
+
+    NOTE: `tool`/`schema_version`/counts are deliberately NOT in metadata —
+    BloodHound's ingest metadata schema rejects them (see OG-27). They live on
+    the payload's `diagnostics` instead.
+    """
     nodes, edges = native_graph_min
+    payload = build_payload(nodes, edges)
+    data = payload.to_dict()
+    assert any(n["id"].startswith("AH-") for n in data["graph"]["nodes"])
+    assert SOURCE_KIND in data["graph"]["nodes"][0]["kinds"]
+    assert data["metadata"]["source_kind"] == SOURCE_KIND
+    assert "tool" not in data["metadata"]
+    # Provenance still exists, just off the wire.
+    assert payload.diagnostics["tool"] == f"agenthound-v{payload.diagnostics['schema_version']}"
+
+
+# --- OG — metadata schema gate (OG-27) ---------------------------------------
+# Regression: BloodHound rejected uploads because metadata carried node_count,
+# edge_count, tool, schema_version, generated_at. Its metadata schema is strict
+# and allows only an optional `source_kind`. These tests pin metadata to that.
+
+def test_og27_metadata_validates_branding_on(native_graph_full, metadata_schema):
+    """OG-27: emitted metadata (branding on) validates against metadata.json."""
+    nodes, edges = native_graph_full
     payload = build_payload(nodes, edges).to_dict()
-    assert any(n["id"].startswith("AH-") for n in payload["graph"]["nodes"])
-    assert SOURCE_KIND in payload["graph"]["nodes"][0]["kinds"]
-    assert "tool" in payload["metadata"]
+    _validate(payload["metadata"], metadata_schema)
+    assert set(payload["metadata"].keys()) == {"source_kind"}
+
+
+def test_og27_metadata_validates_no_branding(native_graph_full, metadata_schema):
+    """OG-27: emitted metadata (--no-branding) validates and is empty."""
+    nodes, edges = native_graph_full
+    payload = build_payload(nodes, edges, strip_branding=True).to_dict()
+    _validate(payload["metadata"], metadata_schema)
+    assert payload["metadata"] == {}
+
+
+def test_og27_metadata_drops_disallowed_keys(native_graph_full, metadata_schema):
+    """OG-27: the keys BloodHound rejected must never appear in metadata."""
+    nodes, edges = native_graph_full
+    for strip in (False, True):
+        meta = build_payload(nodes, edges, strip_branding=strip).to_dict()["metadata"]
+        for bad in ("node_count", "edge_count", "tool", "schema_version", "generated_at"):
+            assert bad not in meta
 
 
 # --- OG — stdout / file output (cli) -----------------------------------------
