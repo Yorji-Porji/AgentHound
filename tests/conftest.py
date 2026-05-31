@@ -31,6 +31,11 @@ def edge_schema() -> dict:
     return json.loads((SCHEMA_DIR / "edge.json").read_text())
 
 
+@pytest.fixture(scope="session")
+def metadata_schema() -> dict:
+    return json.loads((SCHEMA_DIR / "metadata.json").read_text())
+
+
 # --- Native (internal-model) graphs ------------------------------------------
 
 @pytest.fixture

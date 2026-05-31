@@ -232,8 +232,8 @@ def cmd_emit(input_path: Path, output: Path | None, no_branding: bool) -> None:
     _write_bytes(payload_bytes, output)
     if output is not None:
         click.echo(
-            f"Wrote OpenGraph payload: {payload.metadata['node_count']} nodes, "
-            f"{payload.metadata['edge_count']} edges → {output}",
+            f"Wrote OpenGraph payload: {len(payload.nodes)} nodes, "
+            f"{len(payload.edges)} edges → {output}",
             err=True,
         )
 

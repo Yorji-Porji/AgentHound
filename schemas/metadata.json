@@ -1,0 +1,14 @@
+{
+  "title": "Generic Ingest Metadata",
+  "description": "Optional top-level metadata for a generic graph ingestion payload. BloodHound currently supports a single optional field, `source_kind`: a string applied as an additional kind label to every node in the file. The schema is strict — any other property fails validation on ingest.",
+  "type": [
+    "object",
+    "null"
+  ],
+  "properties": {
+    "source_kind": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}
