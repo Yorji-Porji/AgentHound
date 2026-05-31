@@ -7,7 +7,7 @@ name = "agenthound"
 version = "0.2.0"
 description = "Graph-based attack path mapping for AI agents, MCP servers, and the NHIs they reach"
 readme = "README.md"
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.11,<3.15"
 license = { text = "Apache-2.0" }
 authors = [
     { name = "Yorji-Porji" },
@@ -20,6 +20,8 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Security",
 ]
 dependencies = [

@@ -55,3 +55,9 @@ htmlcov/
 *.json.tmp
 out/
 demo_output/
+# Pipeline artifacts produced by the README quickstart (collect -> infer -> emit).
+# Host-specific recon output — never commit these.
+bloodhound.json
+local.json
+mcp.json
+graph.json
