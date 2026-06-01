@@ -118,7 +118,7 @@ The overlay file uses the same schema as the bundled registry. Entries in the ov
 - **Cloud-side NHI permission expansion.** No AWS IAM, GCP, or Azure collector yet — these will fan `NHI → GRANTS_ACCESS → Resource` edges out into real cloud topology.
 - **Path scoring.** Every path currently treated as binary. Reachability scoring (production tier, mutable-tag refs, indirect-injection sources) is the next analytic layer.
 
-See `ROADMAP.md` for the build sequence.
+Progress is tracked in [GitHub Issues](https://github.com/Yorji-Porji/AgentHound/issues).
 
 ## Prior art
 
