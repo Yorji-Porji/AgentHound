@@ -1,0 +1,8 @@
+# 'aws' appears in BOTH allow and deny lists — deny must win (P1-W2-SCOPE-07).
+engagement: conflict-engagement
+authorized_until: "2099-12-31T23:59:59Z"
+providers_allowed:
+  - aws
+  - github
+providers_denied:
+  - aws

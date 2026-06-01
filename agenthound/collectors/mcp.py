@@ -42,11 +42,15 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
 from agenthound.collectors.base import CollectionResult, Collector
+
+if TYPE_CHECKING:
+    from agenthound.audit import AuditLog
+    from agenthound.scope import ScopeGuard
 from agenthound.schema.edges import Edge, PermissionEdgeKind
 from agenthound.schema.nodes import (
     mcp_server_node,
@@ -61,7 +65,14 @@ class MCPCollector(Collector):
 
     name = "mcp"
 
-    def __init__(self, inventory_path: Path) -> None:
+    def __init__(
+        self,
+        inventory_path: Path,
+        *,
+        guard: ScopeGuard | None = None,
+        audit: AuditLog | None = None,
+    ) -> None:
+        super().__init__(guard=guard, audit=audit)
         self.inventory_path = inventory_path
 
     def collect(self) -> CollectionResult:
@@ -94,6 +105,11 @@ class MCPCollector(Collector):
         name = server.get("name")
         if not name:
             result.warnings.append("Skipping server with no 'name' field.")
+            return
+
+        # Scope: a denied provider produces no node and no edge for this server.
+        provider = server.get("provider") or "unknown"
+        if not self.allow_provider(provider, f"mcp:{name}"):
             return
 
         transport = server.get("transport", "stdio")

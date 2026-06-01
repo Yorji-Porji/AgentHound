@@ -1,0 +1,5 @@
+# authorized_until is in the past — the tool must refuse to run (P1-W2-SCOPE-04).
+engagement: lapsed-engagement
+authorized_until: "2000-01-01T00:00:00Z"
+providers_allowed:
+  - aws

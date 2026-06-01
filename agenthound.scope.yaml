@@ -1,0 +1,49 @@
+# Example engagement scope.
+#
+# Pass it to a collector with --scope to enforce an authorization boundary:
+#
+#     export AGENTHOUND_AUDIT_KEY="a-per-engagement-secret"
+#     agenthound local --scope agenthound.scope.yaml -o local.json
+#     agenthound verify-audit engagement-audit.jsonl
+#
+# Enforcement rules:
+#   - authorized_until is a hard stop: once it passes, the tool refuses to run.
+#   - providers_denied always wins over providers_allowed.
+#   - if providers_allowed is non-empty it is exclusive (anything not listed is denied).
+#   - paths_denied globs use * (within a path segment) and ** (across segments).
+#   - outside every time_window, the run is refused (a SKIPPED entry is audited).
+#   - when audit_log is set, AGENTHOUND_AUDIT_KEY must be set or the tool won't start.
+
+engagement: example-engagement-2026
+
+# RFC3339. After this instant, the tool refuses to run at all.
+authorized_until: "2026-12-31T23:59:59Z"
+
+# Exclusive allowlist. Remove or leave empty to allow every provider not denied.
+providers_allowed:
+  - aws
+  - github
+  - kubernetes
+
+# Deny always wins, even against the allowlist above.
+providers_denied:
+  - azure
+
+# Filesystem paths the collector must never read. * stays within a segment;
+# ** crosses directory boundaries.
+paths_denied:
+  - "/home/*/.medical/**"
+  - "**/personal-notes/**"
+
+# Recurring authorized windows. Outside all of them the run is refused.
+time_windows:
+  - days: [mon, tue, wed, thu, fri]
+    start: "09:00"
+    end: "18:00"
+    tz: America/New_York
+
+# Optional wall-clock budget for a single run, in seconds.
+max_runtime_seconds: 1800
+
+# Append-only, HMAC-chained audit trail. Verify later with `agenthound verify-audit`.
+audit_log: engagement-audit.jsonl

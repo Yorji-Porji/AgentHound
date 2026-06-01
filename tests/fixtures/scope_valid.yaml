@@ -1,0 +1,18 @@
+# A well-formed engagement scope (P1-W2-SCOPE-01).
+engagement: acme-corp-2026-q2
+authorized_until: "2099-12-31T23:59:59Z"
+providers_allowed:
+  - aws
+  - github
+providers_denied:
+  - azure
+paths_denied:
+  - "/home/*/.medical/**"
+  - "**/private-notes/**"
+time_windows:
+  - days: [mon, tue, wed, thu, fri]
+    start: "09:00"
+    end: "17:00"
+    tz: America/New_York
+max_runtime_seconds: 3600
+audit_log: audit.jsonl

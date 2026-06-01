@@ -22,12 +22,14 @@ Output goes to stdout by default; pass --output FILE to write a file instead.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
 import click
 
 from agenthound import __version__
+from agenthound.audit import AuditError, AuditLog, verify_audit_log
 from agenthound.collectors.base import CollectionResult
 from agenthound.collectors.local import LocalCollector
 from agenthound.collectors.mcp import MCPCollector
@@ -36,6 +38,7 @@ from agenthound.schema import build_payload
 from agenthound.schema.edges import CoercionEdgeKind, Edge, EdgeKind, PermissionEdgeKind
 from agenthound.schema.nodes import Node, NodeKind
 from agenthound.schema.opengraph import _sanitize_kind
+from agenthound.scope import EngagementScope, ScopeExpired, ScopeGuard
 
 # --- Internal serialization for intermediate files ----------------------------
 
@@ -159,6 +162,52 @@ def _write_result(
         click.echo(f"  warning: {w}", err=True)
 
 
+# --- Scope & audit activation -------------------------------------------------
+
+AUDIT_KEY_ENV = "AGENTHOUND_AUDIT_KEY"
+
+
+def _activate_scope(
+    scope_path: Path | None,
+) -> tuple[ScopeGuard | None, AuditLog | None]:
+    """Load a scope file (opt-in) and enforce the startup gates.
+
+    Returns ``(guard, audit)`` — both ``None`` when no ``--scope`` was given, so
+    unscoped runs behave exactly as before. Raises ``click.ClickException`` on
+    any refusal (expired authorization, missing audit key, outside time window)
+    so the CLI exits non-zero *before* any collector runs.
+    """
+    if scope_path is None:
+        return None, None
+
+    scope = EngagementScope.from_yaml(scope_path)
+
+    try:
+        guard = ScopeGuard(scope)
+    except ScopeExpired as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    audit: AuditLog | None = None
+    if scope.audit_log:
+        try:
+            audit = AuditLog(scope.audit_log, os.environ.get(AUDIT_KEY_ENV, ""))
+        except AuditError as exc:
+            raise click.ClickException(str(exc)) from exc
+
+    # Startup time-window gate: refuse to run outside an authorized window.
+    if not guard.check_time():
+        if audit is not None:
+            audit.record("run", scope.engagement, "SKIPPED", "outside authorized time window")
+        raise click.ClickException(
+            f"Engagement '{scope.engagement}': outside an authorized time window; refusing to run."
+        )
+
+    if audit is not None:
+        audit.record("run", scope.engagement, "ALLOW", "scope active; run authorized")
+
+    return guard, audit
+
+
 # --- Click command group ------------------------------------------------------
 
 @click.group()
@@ -178,15 +227,25 @@ def main() -> None:
 )
 @click.option("--output", "-o", type=click.Path(path_type=Path), default=None)
 @click.option("--no-branding", is_flag=True, help="Strip AgentHound branding for clean merges.")
+@click.option(
+    "--scope",
+    type=click.Path(path_type=Path, exists=True),
+    default=None,
+    help="Engagement scope YAML. Enforces provider/path/time limits and audit logging.",
+)
 def cmd_local(
     home: Path | None,
     hostname: str | None,
     known_servers: Path | None,
     output: Path | None,
     no_branding: bool,
+    scope: Path | None,
 ) -> None:
     """Scan the current machine for AI agents and reachable NHIs."""
-    collector = LocalCollector(home=home, hostname=hostname, known_servers=known_servers)
+    guard, audit = _activate_scope(scope)
+    collector = LocalCollector(
+        home=home, hostname=hostname, known_servers=known_servers, guard=guard, audit=audit
+    )
     _write_result(collector.collect(), output, strip_branding=no_branding)
 
 
@@ -197,9 +256,16 @@ def cmd_local(
 )
 @click.option("--output", "-o", type=click.Path(path_type=Path), default=None)
 @click.option("--no-branding", is_flag=True, help="Strip AgentHound branding for clean merges.")
-def cmd_mcp(inventory: Path, output: Path | None, no_branding: bool) -> None:
+@click.option(
+    "--scope",
+    type=click.Path(path_type=Path, exists=True),
+    default=None,
+    help="Engagement scope YAML. Enforces provider/path/time limits and audit logging.",
+)
+def cmd_mcp(inventory: Path, output: Path | None, no_branding: bool, scope: Path | None) -> None:
     """Analyze a curated MCP server inventory file (YAML or JSON)."""
-    collector = MCPCollector(inventory_path=inventory)
+    guard, audit = _activate_scope(scope)
+    collector = MCPCollector(inventory_path=inventory, guard=guard, audit=audit)
     _write_result(collector.collect(), output, strip_branding=no_branding)
 
 
@@ -236,6 +302,27 @@ def cmd_emit(input_path: Path, output: Path | None, no_branding: bool) -> None:
             f"{len(payload.edges)} edges → {output}",
             err=True,
         )
+
+
+@main.command("verify-audit")
+@click.argument("path", type=click.Path(path_type=Path, exists=True))
+def cmd_verify_audit(path: Path) -> None:
+    """Verify the HMAC hash-chain of an audit log written during a run.
+
+    Reads the signing key from the AGENTHOUND_AUDIT_KEY environment variable —
+    the same key the run used. Exits non-zero and names the first broken line
+    if the log was edited, truncated, or reordered.
+    """
+    key = os.environ.get(AUDIT_KEY_ENV, "")
+    if not key:
+        raise click.ClickException(
+            f"{AUDIT_KEY_ENV} is not set; cannot verify the audit signature."
+        )
+    ok, bad_index, message = verify_audit_log(path, key)
+    if ok:
+        click.echo(f"AUDIT OK: {message} ({path}).")
+        return
+    raise click.ClickException(f"AUDIT TAMPERED at line {bad_index}: {message} ({path}).")
 
 
 if __name__ == "__main__":
