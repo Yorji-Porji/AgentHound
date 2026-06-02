@@ -25,11 +25,15 @@ import platform
 import socket
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
 from agenthound.collectors.base import CollectionResult, Collector
+
+if TYPE_CHECKING:
+    from agenthound.audit import AuditLog
+    from agenthound.scope import ScopeGuard
 from agenthound.schema.edges import Edge, PermissionEdgeKind
 from agenthound.schema.nodes import (
     Node,
@@ -236,7 +240,10 @@ class LocalCollector(Collector):
         hostname: str | None = None,
         *,
         known_servers: Path | None = None,
+        guard: ScopeGuard | None = None,
+        audit: AuditLog | None = None,
     ) -> None:
+        super().__init__(guard=guard, audit=audit)
         self.home = home or Path.home()
         self.hostname = hostname or socket.gethostname()
         self.os_family = platform.system()
@@ -328,17 +335,9 @@ class LocalCollector(Collector):
         runtime: Node,
         result: CollectionResult,
     ) -> None:
-        # Infer transport. Local stdio is the default for reference servers;
-        # `url` keys indicate HTTP/SSE remotes.
-        transport = "stdio"
-        if isinstance(server_cfg, dict):
-            if "url" in server_cfg:
-                transport = "http"
-            elif "command" in server_cfg:
-                transport = "stdio"
-
-        server = mcp_server_node(server_name, transport=transport, config_source=str(config_path))
-        result.nodes.append(server)
+        # Scope: a denied config path takes the whole server off the board.
+        if not self.allow_path(config_path, f"mcp:{server_name}"):
+            return
 
         # Classify against the registry. Unknown servers surface as warnings
         # so the user can extend the registry (or override via --known-servers).
@@ -355,6 +354,22 @@ class LocalCollector(Collector):
             tools = known["tools"]
             classification = known["classification"]
             provider = known["provider"]
+
+        # Scope: a denied provider produces no node and no edge for this server.
+        if not self.allow_provider(provider, f"mcp:{server_name}"):
+            return
+
+        # Infer transport. Local stdio is the default for reference servers;
+        # `url` keys indicate HTTP/SSE remotes.
+        transport = "stdio"
+        if isinstance(server_cfg, dict):
+            if "url" in server_cfg:
+                transport = "http"
+            elif "command" in server_cfg:
+                transport = "stdio"
+
+        server = mcp_server_node(server_name, transport=transport, config_source=str(config_path))
+        result.nodes.append(server)
 
         for tool_name in tools:
             tool = mcp_tool_node(server_name, tool_name, classification=classification)
@@ -391,19 +406,40 @@ class LocalCollector(Collector):
 
     # -- Credentials -----------------------------------------------------------
 
+    def _cred_allowed(self, provider: str, path: Path) -> bool:
+        """Scope gate for a credential source: provider in scope AND path allowed."""
+        return self.allow_provider(provider, str(path)) and self.allow_path(path, str(path))
+
+    def _add_cred_nhi(
+        self,
+        runtime: Node,
+        result: CollectionResult,
+        *,
+        provider: str,
+        identifier: str,
+        nhi_type: str,
+        via: str,
+    ) -> None:
+        nhi = nhi_node(provider=provider, identifier=identifier, nhi_type=nhi_type)
+        result.nodes.append(nhi)
+        result.edges.append(
+            Edge(
+                PermissionEdgeKind.CAN_READ_CRED,
+                runtime.objectid,
+                nhi.objectid,
+                properties={"via": via},
+            )
+        )
+
     def _collect_credentials(self, runtime: Node, result: CollectionResult) -> None:
         # AWS
         for cred_file in (self.home / ".aws" / "credentials", self.home / ".aws" / "config"):
+            if not self._cred_allowed("aws", cred_file):
+                continue
             for profile in _aws_profile_names(cred_file):
-                nhi = nhi_node(provider="aws", identifier=profile, nhi_type="aws_profile")
-                result.nodes.append(nhi)
-                result.edges.append(
-                    Edge(
-                        PermissionEdgeKind.CAN_READ_CRED,
-                        runtime.objectid,
-                        nhi.objectid,
-                        properties={"via": str(cred_file)},
-                    )
+                self._add_cred_nhi(
+                    runtime, result, provider="aws", identifier=profile,
+                    nhi_type="aws_profile", via=str(cred_file),
                 )
 
         # GitHub CLI
@@ -411,61 +447,44 @@ class LocalCollector(Collector):
             self.home / ".config" / "gh" / "hosts.yml",
             self.home / "AppData" / "Roaming" / "GitHub CLI" / "hosts.yml",
         ):
+            if not self._cred_allowed("github", cred_file):
+                continue
             for ident in _gh_hosts(cred_file):
-                nhi = nhi_node(provider="github", identifier=ident, nhi_type="gh_cli_token")
-                result.nodes.append(nhi)
-                result.edges.append(
-                    Edge(
-                        PermissionEdgeKind.CAN_READ_CRED,
-                        runtime.objectid,
-                        nhi.objectid,
-                        properties={"via": str(cred_file)},
-                    )
+                self._add_cred_nhi(
+                    runtime, result, provider="github", identifier=ident,
+                    nhi_type="gh_cli_token", via=str(cred_file),
                 )
 
         # SSH
         ssh_dir = self.home / ".ssh"
-        for pub in _ssh_pubkeys(ssh_dir):
-            nhi = nhi_node(provider="ssh", identifier=pub, nhi_type="ssh_keypair")
-            result.nodes.append(nhi)
-            result.edges.append(
-                Edge(
-                    PermissionEdgeKind.CAN_READ_CRED,
-                    runtime.objectid,
-                    nhi.objectid,
-                    properties={"via": str(ssh_dir / pub)},
+        if self._cred_allowed("ssh", ssh_dir):
+            for pub in _ssh_pubkeys(ssh_dir):
+                self._add_cred_nhi(
+                    runtime, result, provider="ssh", identifier=pub,
+                    nhi_type="ssh_keypair", via=str(ssh_dir / pub),
                 )
-            )
 
         # Kubernetes
         kube_paths = [self.home / ".kube" / "config"]
         if os.environ.get("KUBECONFIG"):
             kube_paths.append(Path(os.environ["KUBECONFIG"]))
         for cred_file in kube_paths:
+            if not self._cred_allowed("kubernetes", cred_file):
+                continue
             for ctx in _kube_contexts(cred_file):
-                nhi = nhi_node(provider="kubernetes", identifier=ctx, nhi_type="kube_context")
-                result.nodes.append(nhi)
-                result.edges.append(
-                    Edge(
-                        PermissionEdgeKind.CAN_READ_CRED,
-                        runtime.objectid,
-                        nhi.objectid,
-                        properties={"via": str(cred_file)},
-                    )
+                self._add_cred_nhi(
+                    runtime, result, provider="kubernetes", identifier=ctx,
+                    nhi_type="kube_context", via=str(cred_file),
                 )
 
         # npm
         for cred_file in [self.home / ".npmrc"]:
+            if not self._cred_allowed("npm", cred_file):
+                continue
             for registry in _npmrc_registries(cred_file):
-                nhi = nhi_node(provider="npm", identifier=registry, nhi_type="npm_registry_auth")
-                result.nodes.append(nhi)
-                result.edges.append(
-                    Edge(
-                        PermissionEdgeKind.CAN_READ_CRED,
-                        runtime.objectid,
-                        nhi.objectid,
-                        properties={"via": str(cred_file)},
-                    )
+                self._add_cred_nhi(
+                    runtime, result, provider="npm", identifier=registry,
+                    nhi_type="npm_registry_auth", via=str(cred_file),
                 )
 
         # Docker / gcloud / azure — presence-only checks.
@@ -474,16 +493,10 @@ class LocalCollector(Collector):
             ("gcloud", self.home / ".config" / "gcloud" / "credentials.db"),
             ("azure", self.home / ".azure" / "azureProfile.json"),
         ]:
+            if not self._cred_allowed(provider, marker):
+                continue
             if marker.exists():
-                nhi = nhi_node(
-                    provider=provider, identifier="default", nhi_type=f"{provider}_default"
-                )
-                result.nodes.append(nhi)
-                result.edges.append(
-                    Edge(
-                        PermissionEdgeKind.CAN_READ_CRED,
-                        runtime.objectid,
-                        nhi.objectid,
-                        properties={"via": str(marker)},
-                    )
+                self._add_cred_nhi(
+                    runtime, result, provider=provider, identifier="default",
+                    nhi_type=f"{provider}_default", via=str(marker),
                 )

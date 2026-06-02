@@ -27,6 +27,10 @@ classifiers = [
 dependencies = [
     "click>=8.1",
     "pyyaml>=6.0",
+    "pydantic>=2.0",
+    # Windows ships no system zoneinfo database; ScopeGuard time-window tz math
+    # relies on it, so vendor the IANA data there.
+    "tzdata; platform_system == 'Windows'",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +41,7 @@ dev = [
     "mypy>=1.7",
     "jsonschema>=4.20",
     "types-PyYAML>=6.0",
+    "freezegun>=1.2",
 ]
 
 [project.scripts]
