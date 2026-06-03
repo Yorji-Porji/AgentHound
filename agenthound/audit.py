@@ -79,8 +79,16 @@ class AuditLog:
         last = GENESIS_HASH
         for line in self.path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
-            if line:
+            if not line:
+                continue
+            try:
                 last = json.loads(line)["hash"]
+            except (json.JSONDecodeError, KeyError) as exc:
+                raise AuditError(
+                    f"Existing audit log {self.path} is corrupt; cannot resume the "
+                    f"chain. Verify it with `agenthound verify-audit` and archive it "
+                    f"before starting a new run."
+                ) from exc
         return last
 
     def record(self, op: str, target: str, decision: str, reason: str) -> dict:

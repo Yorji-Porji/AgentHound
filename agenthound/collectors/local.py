@@ -8,8 +8,8 @@ plus the permission edges that wire them together.
 Design rules:
 
 - **Never read or store credential values.** Only presence and metadata
-  (provider, profile name, key fingerprint, host). The tool's job is to map
-  the graph, not exfiltrate secrets.
+  (provider, profile name, public-key filename, host). The tool's job is to
+  map the graph, not exfiltrate secrets.
 - **Fail soft.** Every file open, JSON parse, and YAML parse is wrapped — a
   missing or malformed config produces a warning, not a crash.
 - **Cross-platform paths.** macOS, Linux, and Windows config locations are
@@ -63,13 +63,6 @@ def _load_registry(path: Path | None = None) -> dict[str, dict[str, Any]]:
     if not isinstance(data, dict):
         return {}
     return data.get("servers") or {}
-
-
-# Agent kinds AgentHound knows how to find. Exposed so the CLI can list them.
-AGENT_KINDS = frozenset({"cursor", "claude_desktop", "claude_code", "vscode", "zed"})
-CRED_PROVIDERS = frozenset(
-    {"aws", "github", "ssh", "kubernetes", "npm", "docker", "gcloud", "azure"}
-)
 
 
 # --- Agent install fingerprints -----------------------------------------------
@@ -138,8 +131,8 @@ def _mcp_config_paths(home: Path) -> list[tuple[str, Path]]:
 
 # --- Credential file parsers --------------------------------------------------
 #
-# Each parser returns a list of identifiers (profile names, hostnames, key
-# fingerprints) — never the credential value.
+# Each parser returns a list of identifiers (profile names, hostnames, public-
+# key filenames) — never the credential value.
 
 def _aws_profile_names(path: Path) -> list[str]:
     """Parse AWS credentials/config file for profile names. Values are not read."""

@@ -1,6 +1,6 @@
 """Week 2 scope tests — P1-W2-SCOPE-01..18.
 
-Covers the pydantic model, the four ScopeGuard checks, and the enforcement
+Covers the pydantic model, the three ScopeGuard checks, and the enforcement
 wiring into collectors. Time-window cases freeze the clock with freezegun so
 timezone math is deterministic.
 """
@@ -50,7 +50,6 @@ def test_scope01_valid_loads():
     assert scope.authorized_until.tzinfo is not None
     assert scope.providers_allowed == ["aws", "github"]
     assert scope.providers_denied == ["azure"]
-    assert scope.max_runtime_seconds == 3600
     assert scope.audit_log == "audit.jsonl"
     assert isinstance(scope.time_windows[0], TimeWindow)
 
@@ -136,7 +135,7 @@ def test_glob_question_and_literal_dot():
     assert not rx.match("abcXtxt")  # '.' is a literal, not a wildcard
 
 
-# --- time windows & runtime (SCOPE-12..16) -----------------------------------
+# --- time windows (SCOPE-12..15) ---------------------------------------------
 
 NY_WINDOW = {
     "days": ["mon", "tue", "wed", "thu", "fri"],
@@ -163,16 +162,6 @@ def test_scope15_day_of_week_gating():
 
 def test_check_time_no_windows_always_allows():
     assert _guard().check_time() is True
-
-
-def test_scope16_runtime_budget():
-    g = _guard(max_runtime_seconds=10)
-    assert g.check_runtime(5) is True
-    assert g.check_runtime(15) is False
-
-
-def test_runtime_no_budget_always_allows():
-    assert _guard().check_runtime(10**9) is True
 
 
 # --- TimeWindow unit coverage ------------------------------------------------
@@ -284,6 +273,16 @@ def test_scope04_cli_expired_aborts():
 
     with pytest.raises(click.ClickException):
         _activate_scope(FIXTURES / "scope_expired.yaml")
+
+
+def test_activate_malformed_scope_aborts(tmp_path: Path):
+    # A scope file that fails validation must abort cleanly, not traceback.
+    from agenthound.cli import _activate_scope
+
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("engagement: x\nauthorized_until: not-a-date\n")
+    with pytest.raises(click.ClickException):
+        _activate_scope(bad)
 
 
 @freeze_time("2026-06-06 14:00:00")  # Saturday — outside the window

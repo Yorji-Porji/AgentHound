@@ -11,19 +11,15 @@ the current ingestion contract.
 
 from __future__ import annotations
 
-import json
 import re
 import warnings
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from agenthound.schema.edges import Edge
 from agenthound.schema.nodes import Node
 
 SOURCE_KIND = "AgentHound"
-SCHEMA_VERSION = "0.2.0"
 MAX_KINDS = 3
 
 # BloodHound built-in edge kinds — warn loudly if we collide with one
@@ -40,25 +36,20 @@ class OpenGraphPayload:
     """A complete OpenGraph ingestion payload.
 
     `metadata` is what BloodHound validates on ingest — it is kept strictly to
-    the fields BloodHound allows (currently just `source_kind`). Provenance and
-    counts that used to live in metadata now live in `diagnostics`, which is
-    *not* emitted into the payload (it would fail BloodHound's strict metadata
-    schema). Use it for logging or local reporting instead.
+    the fields BloodHound allows (currently just `source_kind`). Counts and
+    timestamps are deliberately omitted; BloodHound's strict metadata schema
+    (additionalProperties: false) rejects anything beyond `source_kind`.
     """
 
     metadata: dict[str, Any] = field(default_factory=dict)
     nodes: list[dict[str, Any]] = field(default_factory=list)
     edges: list[dict[str, Any]] = field(default_factory=list)
-    diagnostics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "metadata": self.metadata,
             "graph": {"nodes": self.nodes, "edges": self.edges},
         }
-
-    def write(self, path: Path) -> None:
-        path.write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True))
 
 
 def _sanitize_kind(s: str) -> str:
@@ -244,34 +235,22 @@ def build_payload(
         _serialize_node(n, strip_branding)
         for n in seen_nodes.values()
     ]
-    serialized_edges = [
-        result
-        for e in seen_edges.values()
-        for result in [_serialize_edge(e, strip_branding, known_ids)]
-        if result is not None
-    ]
+    serialized_edges = []
+    for e in seen_edges.values():
+        serialized = _serialize_edge(e, strip_branding, known_ids)
+        if serialized is not None:
+            serialized_edges.append(serialized)
 
     # BloodHound's ingest metadata schema is strict (additionalProperties: false)
-    # and currently permits exactly ONE optional field: `source_kind`. Emitting
-    # anything else (counts, timestamps, tool/version) fails validation on
-    # upload, so those live in `diagnostics` on the payload object instead —
-    # they are never written into the emitted JSON. See schemas/metadata.json.
+    # and currently permits exactly ONE optional field: `source_kind`. Counts,
+    # timestamps, and tool/version are deliberately omitted — emitting them fails
+    # validation on upload. See schemas/metadata.json.
     metadata: dict[str, Any] = {}
     if not strip_branding:
         metadata["source_kind"] = SOURCE_KIND
-
-    diagnostics: dict[str, Any] = {
-        "schema_version": SCHEMA_VERSION,
-        "generated_at": datetime.now(UTC).isoformat(),
-        "node_count": len(serialized_nodes),
-        "edge_count": len(serialized_edges),
-    }
-    if not strip_branding:
-        diagnostics["tool"] = f"agenthound-v{SCHEMA_VERSION}"
 
     return OpenGraphPayload(
         metadata=metadata,
         nodes=serialized_nodes,
         edges=serialized_edges,
-        diagnostics=diagnostics,
     )

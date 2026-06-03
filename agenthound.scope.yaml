@@ -42,8 +42,5 @@ time_windows:
     end: "18:00"
     tz: America/New_York
 
-# Optional wall-clock budget for a single run, in seconds.
-max_runtime_seconds: 1800
-
 # Append-only, HMAC-chained audit trail. Verify later with `agenthound verify-audit`.
 audit_log: engagement-audit.jsonl
