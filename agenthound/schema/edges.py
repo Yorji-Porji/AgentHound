@@ -24,24 +24,19 @@ class PermissionEdgeKind(str, Enum):
     """Edges that encode actual permissions an identity holds."""
 
     RUNS_AS = "RUNS_AS"  # Agent → AgentRuntime
-    HOSTED_ON = "HOSTED_ON"  # AgentRuntime → Developer machine context
     TRUSTS = "TRUSTS"  # Developer → Agent (the agent inherits dev authority)
-    HAS_SYSTEM_PROMPT = "HAS_SYSTEM_PROMPT"  # Agent → SystemPrompt
     CALLS_TOOL = "CALLS_TOOL"  # Agent → MCPTool
     EXPOSES = "EXPOSES"  # MCPServer → MCPTool
     AUTHENTICATES_AS = "AUTHENTICATES_AS"  # MCPServer/MCPTool → NHI
     GRANTS_ACCESS = "GRANTS_ACCESS"  # NHI → Resource
     CAN_READ_CRED = "CAN_READ_CRED"  # AgentRuntime → NHI (cred pickup)
-    CONFIGURED_BY = "CONFIGURED_BY"  # MCPServer → Developer
 
 
 class CoercionEdgeKind(str, Enum):
     """Edges that encode coercion reachability — the prompt injection model."""
 
     COERCES = "COERCES"  # InjectableInput → Agent
-    IS_INJECTION_SINK = "IS_INJECTION_SINK"  # MCPTool → Agent (surfaces back to ctx)
     IS_INJECTION_SOURCE = "IS_INJECTION_SOURCE"  # MCPTool → InjectableInput
-    SHADOWED_BY = "SHADOWED_BY"  # MCPTool → MCPTool (cross-server description shadowing)
     ESCALATES_VIA = "ESCALATES_VIA"  # Agent → MCPTool (induced privileged invocation)
 
 

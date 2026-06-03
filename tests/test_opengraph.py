@@ -209,8 +209,7 @@ def test_og18_branding_on_keeps_prefix_and_source_kind(native_graph_min):
     source kind on nodes, and sets metadata.source_kind.
 
     NOTE: `tool`/`schema_version`/counts are deliberately NOT in metadata —
-    BloodHound's ingest metadata schema rejects them (see OG-27). They live on
-    the payload's `diagnostics` instead.
+    BloodHound's ingest metadata schema rejects them (see OG-27).
     """
     nodes, edges = native_graph_min
     payload = build_payload(nodes, edges)
@@ -219,8 +218,6 @@ def test_og18_branding_on_keeps_prefix_and_source_kind(native_graph_min):
     assert SOURCE_KIND in data["graph"]["nodes"][0]["kinds"]
     assert data["metadata"]["source_kind"] == SOURCE_KIND
     assert "tool" not in data["metadata"]
-    # Provenance still exists, just off the wire.
-    assert payload.diagnostics["tool"] == f"agenthound-v{payload.diagnostics['schema_version']}"
 
 
 # --- OG — metadata schema gate (OG-27) ---------------------------------------

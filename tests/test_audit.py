@@ -158,3 +158,13 @@ def test_verify_missing_hash_field(tmp_path: Path):
 
 def test_canonical_json_is_sorted_and_compact():
     assert canonical_json({"b": 1, "a": 2}) == '{"a":2,"b":1}'
+
+
+def test_resume_corrupt_log_raises(tmp_path: Path):
+    # A run resuming from a tampered/corrupt log must refuse, not crash.
+    path = tmp_path / "a.jsonl"
+    AuditLog(path, "key").record("op", "t", "ALLOW", "first")
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write("}{ not valid json\n")
+    with pytest.raises(AuditError):
+        AuditLog(path, "key")

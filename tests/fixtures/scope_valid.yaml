@@ -14,5 +14,4 @@ time_windows:
     start: "09:00"
     end: "17:00"
     tz: America/New_York
-max_runtime_seconds: 3600
 audit_log: audit.jsonl

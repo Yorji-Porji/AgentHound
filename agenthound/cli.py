@@ -27,6 +27,8 @@ import sys
 from pathlib import Path
 
 import click
+import yaml
+from pydantic import ValidationError
 
 from agenthound import __version__
 from agenthound.audit import AuditError, AuditLog, verify_audit_log
@@ -132,7 +134,7 @@ def _result_from_json(data: dict) -> CollectionResult:
             )
         )
 
-    result.warnings = data.get("warnings", []) if "warnings" in data else []
+    result.warnings = data.get("warnings", [])
     return result
 
 
@@ -180,7 +182,10 @@ def _activate_scope(
     if scope_path is None:
         return None, None
 
-    scope = EngagementScope.from_yaml(scope_path)
+    try:
+        scope = EngagementScope.from_yaml(scope_path)
+    except (OSError, yaml.YAMLError, ValidationError) as exc:
+        raise click.ClickException(f"Invalid scope file {scope_path}: {exc}") from exc
 
     try:
         guard = ScopeGuard(scope)

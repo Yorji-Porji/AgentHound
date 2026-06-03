@@ -23,7 +23,6 @@ class NodeKind(str, Enum):
     # AI agent layer
     AGENT = "Agent"
     AGENT_RUNTIME = "AgentRuntime"
-    SYSTEM_PROMPT = "SystemPrompt"
 
     # MCP / tool layer
     MCP_SERVER = "MCPServer"
@@ -61,12 +60,6 @@ class Node:
             f"{self.kind.value}:{self.stable_id}".encode(), usedforsecurity=False
         ).hexdigest()
         return f"AH-{self.kind.value}-{digest[:16]}"
-
-    def with_property(self, key: str, value: Any) -> Node:
-        """Return a copy with one property added/overwritten."""
-        new_props = dict(self.properties)
-        new_props[key] = value
-        return Node(kind=self.kind, name=self.name, stable_id=self.stable_id, properties=new_props)
 
 
 def agent_node(
@@ -133,8 +126,8 @@ def nhi_node(provider: str, identifier: str, nhi_type: str) -> Node:
     """Build an NHI node.
 
     `provider` is the upstream system (github, aws, gcp, slack, salesforce, npm...).
-    `identifier` is a stable reference within that provider (account ID, key
-    fingerprint, OAuth app ID). Never the credential value itself.
+    `identifier` is a stable reference within that provider (account ID,
+    public-key filename, OAuth app ID). Never the credential value itself.
     """
     return Node(
         kind=NodeKind.NHI,

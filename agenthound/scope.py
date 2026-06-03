@@ -2,13 +2,12 @@
 
 An ``agenthound.scope.yaml`` declares *what* a run is permitted to touch and
 *when*. :class:`EngagementScope` is the validated model of that file;
-:class:`ScopeGuard` answers the four enforcement questions a collector asks
+:class:`ScopeGuard` answers the three enforcement questions a collector asks
 before it touches anything:
 
 - ``check_provider(name)`` — is this credential/MCP provider in scope?
 - ``check_path(path)`` — is this filesystem path allowed (not denied)?
 - ``check_time(now)`` — are we inside an authorized time window right now?
-- ``check_runtime(elapsed)`` — has the run exceeded its time budget?
 
 Two rules are absolute and live in code, not in the per-call checks:
 
@@ -150,7 +149,6 @@ class EngagementScope(BaseModel):
     providers_denied: list[str] = []
     paths_denied: list[str] = []
     time_windows: list[TimeWindow] = []
-    max_runtime_seconds: int | None = None
     audit_log: str | None = None
 
     @field_validator("authorized_until")
@@ -201,9 +199,3 @@ class ScopeGuard:
             return True
         moment = now or datetime.now(UTC)
         return any(w.contains(moment) for w in self.scope.time_windows)
-
-    def check_runtime(self, elapsed_seconds: float) -> bool:
-        """False once a run exceeds its ``max_runtime_seconds`` budget."""
-        if self.scope.max_runtime_seconds is None:
-            return True
-        return elapsed_seconds <= self.scope.max_runtime_seconds
