@@ -120,6 +120,12 @@ The overlay file uses the same schema as the bundled registry. Entries in the ov
 
 Progress is tracked in [GitHub Issues](https://github.com/Yorji-Porji/AgentHound/issues).
 
+## Documentation
+
+- [docs/ATTACK-MAPPING.md](docs/ATTACK-MAPPING.md) — every collector and edge mapped to MITRE ATT&CK and ATLAS techniques.
+- [docs/AUTHORIZED-USE.md](docs/AUTHORIZED-USE.md) — defensive, analysis-only posture and the built-in engagement guardrails.
+- [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md) — trust boundaries, abuse cases, and what the tamper-evident audit log does and does not guarantee.
+
 ## Prior art
 
 - [BloodHound](https://github.com/SpecterOps/BloodHound) and OpenGraph by SpecterOps — the graph framework AgentHound is a collector for
