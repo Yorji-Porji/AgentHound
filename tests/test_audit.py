@@ -168,3 +168,15 @@ def test_resume_corrupt_log_raises(tmp_path: Path):
         fh.write("}{ not valid json\n")
     with pytest.raises(AuditError):
         AuditLog(path, "key")
+
+
+def test_verify_rejects_added_field(tmp_path: Path):
+    # F11: a field added to a line is not covered by the signature; verify must
+    # still reject it (a genuine line carries exactly the body fields + hash).
+    path = tmp_path / "a.jsonl"
+    AuditLog(path, "key").record("op", "t", "ALLOW", "r")
+    entry = json.loads(path.read_text().splitlines()[0])
+    entry["sneaky"] = "x"
+    path.write_text(json.dumps(entry) + "\n")
+    ok, idx, msg = verify_audit_log(path, "key")
+    assert not ok and idx == 0 and "not covered" in msg

@@ -40,6 +40,10 @@ GENESIS_HASH = "0" * 64
 # sorts them anyway). ``hash`` is explicitly NOT part of the body.
 _BODY_FIELDS = ("ts", "op", "target", "decision", "reason", "prev_hash")
 
+# A genuine line is exactly the signed body plus its hash. Any other key set
+# means a field was added or removed — which the signature itself cannot cover.
+_EXPECTED_LINE_KEYS = frozenset((*_BODY_FIELDS, "hash"))
+
 
 class AuditError(Exception):
     """Raised on a missing key or an unreadable/instantiation failure."""
@@ -125,6 +129,8 @@ def verify_audit_log(path: str | Path, key: str | bytes) -> tuple[bool, int | No
             return False, idx, "line is not valid JSON"
         if "hash" not in entry:
             return False, idx, "line is missing its hash"
+        if set(entry) != _EXPECTED_LINE_KEYS:
+            return False, idx, "line carries fields not covered by the signature"
         stored = entry["hash"]
         body = {k: entry[k] for k in _BODY_FIELDS if k in entry}
         if entry.get("prev_hash") != prev:
