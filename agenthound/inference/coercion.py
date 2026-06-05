@@ -195,7 +195,14 @@ class CoercionInferencer:
         derived: CollectionResult,
     ) -> None:
         """Create an InjectableInput per source tag and wire it to callers."""
-        for tag in tags & (SOURCE_TAGS | BOTH_TAGS):
+        source_tags = tags & (SOURCE_TAGS | BOTH_TAGS)
+        # An unclassified tool carries no concrete source tag, but the
+        # conservative posture is to still treat it as a possible injection
+        # source — an unrecognized tool may well pull untrusted content into
+        # context. (The sink side is handled separately in _mark_sink.)
+        if not source_tags and "unclassified" in tags:
+            source_tags = {"unclassified"}
+        for tag in source_tags:
             source_kind, descriptor = TAG_TO_SOURCE_DESCRIPTOR.get(
                 tag, ("unknown", tool.properties.get("tool", "unknown"))
             )
