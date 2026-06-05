@@ -5,6 +5,10 @@ Four subcommands chain together to produce a BloodHound OpenGraph payload:
     agenthound local [--home DIR] [--known-servers FILE] [--output FILE]
         Scan the current machine. Without --output, JSON goes to stdout.
 
+    agenthound offline ARCHIVE [--hostname NAME] [--output FILE]
+        Run the local-collector logic against a captured tarball of config
+        and credential paths, instead of scanning a live machine.
+
     agenthound mcp --input INVENTORY [--output FILE]
         Analyze a curated MCP server inventory file (YAML or JSON).
 
@@ -24,6 +28,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tarfile
 from pathlib import Path
 
 import click
@@ -36,6 +41,7 @@ from agenthound.collectors.base import CollectionResult
 from agenthound.collectors.local import LocalCollector
 from agenthound.collectors.mcp import MCPCollector
 from agenthound.inference import CoercionInferencer
+from agenthound.offline import UnsafeArchiveError, extracted_home
 from agenthound.schema import build_payload
 from agenthound.schema.edges import CoercionEdgeKind, Edge, EdgeKind, PermissionEdgeKind
 from agenthound.schema.nodes import Node, NodeKind
@@ -252,6 +258,59 @@ def cmd_local(
         home=home, hostname=hostname, known_servers=known_servers, guard=guard, audit=audit
     )
     _write_result(collector.collect(), output, strip_branding=no_branding)
+
+
+@main.command("offline")
+@click.argument("archive", type=click.Path(path_type=Path, exists=True))
+@click.option(
+    "--hostname",
+    type=str,
+    default="offline",
+    show_default=True,
+    help="Hostname for the captured host. Set this to the real host for stable node identity.",
+)
+@click.option(
+    "--known-servers",
+    type=click.Path(path_type=Path, exists=True),
+    default=None,
+    help="Path to a YAML registry overlay extending the bundled known-servers list.",
+)
+@click.option("--output", "-o", type=click.Path(path_type=Path), default=None)
+@click.option("--no-branding", is_flag=True, help="Strip AgentHound branding for clean merges.")
+@click.option(
+    "--scope",
+    type=click.Path(path_type=Path, exists=True),
+    default=None,
+    help="Engagement scope YAML. Enforces provider/path/time limits and audit logging.",
+)
+def cmd_offline(
+    archive: Path,
+    hostname: str,
+    known_servers: Path | None,
+    output: Path | None,
+    no_branding: bool,
+    scope: Path | None,
+) -> None:
+    """Analyze a captured tarball of config/credential paths.
+
+    ARCHIVE is a .tar(.gz/.bz2/.xz) of the paths the local collector scans
+    (.aws/, .ssh/, .config/Claude/, .npmrc, ...), laid out as under a home
+    directory. Produces the same graph a live `local` run would.
+    """
+    guard, audit = _activate_scope(scope)
+    try:
+        with extracted_home(archive) as home:
+            collector = LocalCollector(
+                home=home,
+                hostname=hostname,
+                known_servers=known_servers,
+                guard=guard,
+                audit=audit,
+            )
+            result = collector.collect()
+    except (UnsafeArchiveError, tarfile.TarError, OSError) as exc:
+        raise click.ClickException(f"Could not analyze archive {archive}: {exc}") from exc
+    _write_result(result, output, strip_branding=no_branding)
 
 
 @main.command("mcp")

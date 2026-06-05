@@ -15,6 +15,7 @@ The existing MCP security tool ecosystem (Snyk agent-scan, Invariant mcp-scan, C
 ## What it does
 
 - **`agenthound local`** — scans the current machine for installed AI assistants, their configured MCP servers, and reachable credentials. Produces an inventory of agent nodes, runtime nodes, and the credentials each agent's runtime can pick up from environment variables, profile files, and config dirs.
+- **`agenthound offline`** — runs the same local-collector logic against a captured `.tar.gz` of config/credential paths instead of a live machine. "Capture cheap on the engagement host, analyze in a clean environment." Untrusted archives are extracted defensively (no path traversal, no escaping links).
 - **`agenthound mcp`** — parses a curated MCP server inventory file (YAML or JSON) and emits its nodes and edges. Useful for modeling documented fleets without touching each developer's machine.
 - **`agenthound infer`** — runs the coercion inference pass over collected nodes, emitting `COERCES` edges from injectable input sources through agents into the tools and identities they can reach.
 - **`agenthound emit`** — produces a BloodHound OpenGraph JSON payload ready for ingestion into BloodHound CE.
