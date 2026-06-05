@@ -5,10 +5,13 @@ adversary behavior it models. It uses two frameworks:
 
 - **[MITRE ATT&CK Enterprise](https://attack.mitre.org/)** — for the
   credential-access and valid-accounts behavior the graph exposes.
-- **[MITRE ATLAS](https://atlas.mitre.org/)** — for the AI-specific behavior
-  (prompt injection, plugin/tool abuse) the *coercion edges* model. ATLAS is
-  the adversarial-ML companion matrix to ATT&CK; AgentHound's differentiator
-  lives almost entirely here.
+- **[MITRE ATLAS](https://atlas.mitre.org/)** — the adversarial-ML companion
+  matrix to ATT&CK, for the AI-specific behavior the graph models. ATLAS spans
+  **both halves** of the chain: the *coercion edges* (prompt injection, AI-agent
+  tool invocation) where AgentHound's differentiator lives, and — through
+  ATLAS's own credential-access, discovery, and exfiltration techniques — the
+  credential and valid-account behavior the `local` and `mcp` collectors
+  surface. Where a row maps to both frameworks, both IDs are given.
 
 AgentHound is **analysis-only**. It maps where these techniques *could* land —
 it never executes any of them. The mapping below is "what an operator looking
@@ -40,6 +43,12 @@ records **presence and identifiers only — never credential values** (see
 | docker / gcloud / azure presence | provider config markers | **T1552.001** Credentials In Files |
 | Installed AI assistants & MCP configs | per-OS app dirs | **T1518** Software Discovery |
 
+**ATLAS counterpart.** The same behavior maps into the adversarial-ML matrix:
+credential discovery on disk is **AML.T0055** Unsecured Credentials (ATLAS's
+analogue to T1552), and enumerating the installed assistants and their tool
+configs is **AML.T0007** Discover AI Artifacts. Presence and identifiers only —
+the techniques describe the reconnaissance target, never the theft.
+
 The collector models the *target* of credential theft, not the theft itself.
 An over-broad set of NHIs reachable from one runtime is exactly the
 `T1552.001 → T1078.004` pivot a graph is meant to make legible.
@@ -50,10 +59,10 @@ An over-broad set of NHIs reachable from one runtime is exactly the
 servers, the tools they expose, the NHIs they authenticate as, and (optionally)
 the cloud/SaaS resources those NHIs reach. No live network connection.
 
-| Relationship | ATT&CK technique |
-|---|---|
-| NHI → cloud/SaaS resource (`GRANTS_ACCESS`) | **T1078.004** Valid Accounts: Cloud Accounts |
-| MCP server authenticates as NHI (`AUTHENTICATES_AS`) | **T1078** Valid Accounts |
+| Relationship | ATT&CK | ATLAS |
+|---|---|---|
+| NHI → cloud/SaaS resource (`GRANTS_ACCESS`) | **T1078.004** Valid Accounts: Cloud Accounts | **AML.T0012** Valid Accounts |
+| MCP server authenticates as NHI (`AUTHENTICATES_AS`) | **T1078** Valid Accounts | **AML.T0012** Valid Accounts |
 
 ---
 
@@ -64,15 +73,15 @@ the cloud/SaaS resources those NHIs reach. No live network connection.
 Standard authority relationships — "this principal legitimately holds this
 access." They are the substrate the coercion analysis runs over.
 
-| Edge | Meaning | ATT&CK |
-|---|---|---|
-| `RUNS_AS` | Agent → AgentRuntime | — (structural) |
-| `TRUSTS` | Developer → Agent (agent inherits dev authority) | **T1078** Valid Accounts |
-| `EXPOSES` | MCPServer → MCPTool | — (structural) |
-| `CALLS_TOOL` | Agent → MCPTool | **T1059** Command and Scripting Interpreter (when the tool is a sink) |
-| `AUTHENTICATES_AS` | MCPServer/MCPTool → NHI | **T1078** Valid Accounts |
-| `CAN_READ_CRED` | AgentRuntime → NHI (credential pickup) | **T1552.001** Credentials In Files |
-| `GRANTS_ACCESS` | NHI → Resource | **T1078.004** Valid Accounts: Cloud |
+| Edge | Meaning | ATT&CK | ATLAS |
+|---|---|---|---|
+| `RUNS_AS` | Agent → AgentRuntime | — (structural) | — |
+| `TRUSTS` | Developer → Agent (agent inherits dev authority) | **T1078** Valid Accounts | **AML.T0012** Valid Accounts |
+| `EXPOSES` | MCPServer → MCPTool | — (structural) | — |
+| `CALLS_TOOL` | Agent → MCPTool | **T1059** Command and Scripting Interpreter (sink case) | **AML.T0050** Command and Scripting Interpreter |
+| `AUTHENTICATES_AS` | MCPServer/MCPTool → NHI | **T1078** Valid Accounts | **AML.T0012** Valid Accounts |
+| `CAN_READ_CRED` | AgentRuntime → NHI (credential pickup) | **T1552.001** Credentials In Files | **AML.T0055** Unsecured Credentials |
+| `GRANTS_ACCESS` | NHI → Resource | **T1078.004** Valid Accounts: Cloud | **AML.T0012** Valid Accounts |
 
 ### Coercion edges (`CoercionEdgeKind`) — the differentiator
 
@@ -83,7 +92,7 @@ agent's context can steer it." This is ATLAS territory.
 |---|---|---|
 | `IS_INJECTION_SOURCE` | MCPTool → InjectableInput (a source tool pulls untrusted content in) | **AML.T0051** LLM Prompt Injection |
 | `COERCES` | InjectableInput → Agent (the headline edge: untrusted input steers the agent) | **AML.T0051.000/.001** Direct / Indirect Prompt Injection |
-| `ESCALATES_VIA` | Agent → MCPTool (agent can be steered into invoking a privileged sink with attacker-chosen args) | **AML.T0053** LLM Plugin Compromise |
+| `ESCALATES_VIA` | Agent → MCPTool (agent can be steered into invoking a privileged sink with attacker-chosen args) | **AML.T0053** AI Agent Tool Invocation |
 
 The `injection_class` property on each coercion edge refines the ATLAS mapping:
 
@@ -91,20 +100,31 @@ The `injection_class` property on each coercion edge refines the ATLAS mapping:
 |---|---|---|
 | `direct` | `url_fetcher` | AML.T0051.000 Direct Prompt Injection |
 | `indirect` | `mail_reader`, `file_reader` | AML.T0051.001 Indirect Prompt Injection |
-| `stored` | `rag_retriever`, `query_runner` | AML.T0051.001 Indirect (content at rest) |
-| `shadow` | (cross-server tool shadowing — roadmap) | AML.T0053 LLM Plugin Compromise |
+| `stored` | `rag_retriever`, `query_runner` | AML.T0051.001 Indirect; staged by **AML.T0070** RAG Poisoning / **AML.T0066** Retrieval Content Crafting |
+| `shadow` | (cross-server tool shadowing — roadmap) | AML.T0053 AI Agent Tool Invocation |
 
-### Sink classifications → downstream ATT&CK
+Where the injected content's aim is to defeat the model's guardrails rather than
+merely steer it, the payload itself is **AML.T0054** LLM Jailbreak. Coercion
+reachability — these edges — is the precondition; the jailbreak is what the
+content does once it lands in context.
+
+### Sink classifications → downstream effect
 
 When a coerced agent invokes a sink tool, the *effect* maps back into Enterprise
-ATT&CK by tool class:
+ATT&CK by tool class, with the ATLAS counterpart where one exists:
 
-| Sink tag | Effect | ATT&CK |
-|---|---|---|
-| `shell_executor` | Runs attacker-chosen commands | **T1059** Command and Scripting Interpreter |
-| `code_writer` | Writes code that will execute | **T1059** / **T1554** Compromise Host Software Binary |
-| `cloud_mutator` | Mutates cloud state | **T1098** Account Manipulation / **T1578** Modify Cloud Compute Infrastructure |
-| `query_runner` | Reads possibly-poisoned data, writes it (both source and sink) | **T1213** Data from Information Repositories |
+| Sink tag | Effect | ATT&CK | ATLAS |
+|---|---|---|---|
+| `shell_executor` | Runs attacker-chosen commands | **T1059** Command and Scripting Interpreter | **AML.T0050** Command and Scripting Interpreter |
+| `code_writer` | Writes code that will execute | **T1059** / **T1554** Compromise Host Software Binary | **AML.T0050** Command and Scripting Interpreter |
+| `cloud_mutator` | Mutates cloud state | **T1098** Account Manipulation / **T1578** Modify Cloud Compute Infrastructure | — |
+| `query_runner` | Reads possibly-poisoned data, writes it (both source and sink) | **T1213** Data from Information Repositories | **AML.T0036** Data from Information Repositories |
+
+When the coerced action is to *move data out* — reading credentials or
+repository data and sending it onward — that exfiltration is **AML.T0057** LLM
+Data Leakage (inducing the agent to surface what it can reach) and
+**AML.T0025** Exfiltration via Cyber Means (the data leaving over a normal
+channel).
 
 ---
 
@@ -120,7 +140,7 @@ InjectableInput ──COERCES──▶ Agent ──ESCALATES_VIA──▶ MCPToo
                                               AUTHENTICATES_AS
                                                           ▼
                                                         NHI ──GRANTS_ACCESS──▶ Resource
-                                                     T1078.004              (prod blast radius)
+                                                     T1078.004 / AML.T0012  (prod blast radius)
 ```
 
 *"If untrusted content reaches this developer's AI assistant, what production
@@ -131,6 +151,7 @@ chain answers it.
 
 ## Roadmap: technique IDs in edge properties
 
-A future change will embed the relevant technique ID(s) directly in each edge's
-`properties.attck` field so the mapping is queryable in BloodHound, not just
-documented here. Tracked against the Phase 1 docs milestone.
+A future change will embed the relevant ATT&CK and ATLAS technique ID(s)
+directly in each edge's `properties.attck` / `properties.atlas` fields so the
+mapping is queryable in BloodHound, not just documented here. Tracked against
+the Phase 1 docs milestone.
