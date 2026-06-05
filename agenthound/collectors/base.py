@@ -39,8 +39,6 @@ class Collector(ABC):
     a ``SKIPPED`` audit entry and no node/edge.
     """
 
-    name: str = "base"
-
     def __init__(
         self,
         *,

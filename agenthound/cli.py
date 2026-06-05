@@ -146,6 +146,20 @@ def _result_from_json(data: dict) -> CollectionResult:
     return result
 
 
+def _load_collection_file(path: Path) -> CollectionResult:
+    """Read an intermediate collection/graph JSON file, failing cleanly on garbage.
+
+    ``infer``/``emit`` take operator-provided files; a malformed or wrong-shaped
+    one should produce a clean error, not a traceback — matching the fail-soft
+    posture the collectors already hold.
+    """
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return _result_from_json(data)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError, IndexError) as exc:
+        raise click.ClickException(f"Could not read collection file {path}: {exc}") from exc
+
+
 # --- Output handling ----------------------------------------------------------
 
 def _write_bytes(data: bytes, output: Path | None) -> None:
@@ -351,8 +365,7 @@ def cmd_infer(inputs: tuple[Path, ...], output: Path | None, no_branding: bool) 
     """Merge collection results and derive coercion edges."""
     merged = CollectionResult()
     for path in inputs:
-        data = json.loads(path.read_text())
-        merged.extend(_result_from_json(data))
+        merged.extend(_load_collection_file(path))
 
     derived = CoercionInferencer().infer(merged)
     merged.extend(derived)
@@ -365,8 +378,7 @@ def cmd_infer(inputs: tuple[Path, ...], output: Path | None, no_branding: bool) 
 @click.option("--no-branding", is_flag=True, help="Strip AgentHound branding for clean merges.")
 def cmd_emit(input_path: Path, output: Path | None, no_branding: bool) -> None:
     """Emit a BloodHound OpenGraph JSON payload."""
-    data = json.loads(input_path.read_text())
-    result = _result_from_json(data)
+    result = _load_collection_file(input_path)
     payload = build_payload(result.nodes, result.edges, strip_branding=no_branding)
     payload_bytes = json.dumps(payload.to_dict(), indent=2).encode("utf-8")
     _write_bytes(payload_bytes, output)

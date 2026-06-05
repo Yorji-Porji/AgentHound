@@ -225,8 +225,6 @@ class LocalCollector(Collector):
         bundled default.
     """
 
-    name = "local"
-
     def __init__(
         self,
         home: Path | None = None,
@@ -344,9 +342,12 @@ class LocalCollector(Collector):
             classification = ["unclassified"]
             provider = "unknown"
         else:
-            tools = known["tools"]
-            classification = known["classification"]
-            provider = known["provider"]
+            # Fail soft on a malformed --known-servers overlay: an entry missing
+            # a key falls back to the unknown-server defaults rather than raising
+            # KeyError mid-scan.
+            tools = known.get("tools", ["__unknown__"])
+            classification = known.get("classification", ["unclassified"])
+            provider = known.get("provider", "unknown")
 
         # Scope: a denied provider produces no node and no edge for this server.
         if not self.allow_provider(provider, f"mcp:{server_name}"):

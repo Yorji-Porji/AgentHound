@@ -1,0 +1,59 @@
+"""Robustness tests from the Pass-1 audit cleanup.
+
+F8 — `infer`/`emit` must fail cleanly (ClickException, not a traceback) on a
+malformed or wrong-shaped input file.
+F9 — a `--known-servers` overlay entry missing keys must not crash the local
+collector; it falls back to the unknown-server defaults.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from click.testing import CliRunner
+
+from agenthound.cli import main
+from agenthound.collectors.local import LocalCollector
+
+# --- F8: infer/emit reject bad input cleanly ---------------------------------
+
+def test_infer_rejects_malformed_json(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.json"
+    bad.write_text("{ this is not valid json")
+    result = CliRunner().invoke(main, ["infer", str(bad)])
+    assert result.exit_code != 0
+    assert "Could not read collection file" in result.output
+
+
+def test_emit_rejects_structurally_invalid_graph(tmp_path: Path) -> None:
+    # Valid JSON, but the only node kind is the branding kind — this used to
+    # raise IndexError out of _result_from_json and traceback to the user.
+    bad = tmp_path / "bad.json"
+    only_branding_node = {"id": "x", "kinds": ["AgentHound"], "properties": {}}
+    bad.write_text(json.dumps({"graph": {"nodes": [only_branding_node], "edges": []}}))
+    result = CliRunner().invoke(main, ["emit", str(bad)])
+    assert result.exit_code != 0
+    assert "Could not read collection file" in result.output
+
+
+# --- F9: malformed known-servers overlay does not crash ----------------------
+
+def test_known_servers_overlay_missing_keys_does_not_crash(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    config_dir = home / ".config" / "Claude"
+    config_dir.mkdir(parents=True)
+    (config_dir / "claude_desktop_config.json").write_text(
+        json.dumps({"mcpServers": {"weirdserver": {"command": "x"}}})
+    )
+    # Overlay entry is missing `classification` and `provider`.
+    overlay = tmp_path / "overlay.yaml"
+    overlay.write_text("servers:\n  weirdserver:\n    tools: [do_thing]\n")
+
+    # Previously raised KeyError on known['classification']; must now fail soft.
+    result = LocalCollector(home=home, hostname="h", known_servers=overlay).collect()
+
+    server_nodes = [n for n in result.nodes if n.kind.value == "MCPServer"]
+    assert server_nodes, "server should still be emitted with default classification/provider"
+    tool_nodes = [n for n in result.nodes if n.kind.value == "MCPTool"]
+    assert any(t.properties.get("classification") == ["unclassified"] for t in tool_nodes)
