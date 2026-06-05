@@ -6,8 +6,10 @@ Four subcommands chain together to produce a BloodHound OpenGraph payload:
         Scan the current machine. Without --output, JSON goes to stdout.
 
     agenthound offline ARCHIVE [--hostname NAME] [--output FILE]
-        Run the local-collector logic against a captured tarball of config
-        and credential paths, instead of scanning a live machine.
+        Analyze a captured snapshot of an *offline* host (a tarball of its
+        config/credential paths), instead of scanning a live machine you're on.
+        "Offline" = the target host, not the tool (which is network-free either
+        way). Same graph as `local`; untrusted archives are extracted safely.
 
     agenthound mcp --input INVENTORY [--output FILE]
         Analyze a curated MCP server inventory file (YAML or JSON).
@@ -291,11 +293,19 @@ def cmd_offline(
     no_branding: bool,
     scope: Path | None,
 ) -> None:
-    """Analyze a captured tarball of config/credential paths.
+    """Analyze a captured (offline) host from a tarball, not a live machine.
+
+    "Offline" refers to the *target*: you analyze a captured snapshot of a host
+    rather than one you're sitting on. (The whole tool is already network-free;
+    this is about *where the data comes from*, not network behavior.)
 
     ARCHIVE is a .tar(.gz/.bz2/.xz) of the paths the local collector scans
     (.aws/, .ssh/, .config/Claude/, .npmrc, ...), laid out as under a home
-    directory. Produces the same graph a live `local` run would.
+    directory. Untrusted archives are extracted defensively (no path traversal
+    or escaping links). Produces the same graph a live `local` run would; the
+    value is the capture / clean-room workflow, not a different analysis.
+
+    For a host you ARE on, use `local` (or `local --home DIR`).
     """
     guard, audit = _activate_scope(scope)
     try:
