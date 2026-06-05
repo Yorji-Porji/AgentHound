@@ -75,13 +75,59 @@ In English: *for any external content source that can reach an agent, walk up to
 
 See `cypher/queries.yaml` for the full query library (already in emitted form).
 
-## Quick start
+## Requirements
+
+- **Python 3.11–3.14**, **git**, and Linux / macOS / Windows.
+- Pure-Python with **no network calls** — AgentHound only reads local files.
+
+## Install
+
+Install into a virtual environment so it stays isolated from your system Python.
+
+**Linux / macOS:**
 
 ```bash
-pip install -e .
+git clone https://github.com/Yorji-Porji/AgentHound.git
+cd AgentHound
+python3 -m venv .venv
+source .venv/bin/activate          # run this in every new shell
+pip install -e ".[dev]"            # AgentHound + dev tools (pytest, ruff, mypy)
+```
 
-# Scan the current machine. Without -o, JSON goes to stdout.
+**Windows (PowerShell):**
+
+```powershell
+git clone https://github.com/Yorji-Porji/AgentHound.git
+cd AgentHound
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -e ".[dev]"
+```
+
+Verify it worked:
+
+```bash
+agenthound --version               # -> 0.2.0
+agenthound --help                  # lists the subcommands
+```
+
+> The virtualenv must be **active in each new terminal** (`source .venv/bin/activate`,
+> or `.\.venv\Scripts\Activate.ps1` on Windows). If you ever see
+> `agenthound: command not found`, that's almost always the cause. Plain
+> `pip install -e .` (without `[dev]`) works too if you don't need the test tools.
+
+## Quick start
+
+With the venv active:
+
+```bash
+# Scan THIS machine for AI assistants, MCP servers, and reachable creds.
+# Without -o, JSON goes to stdout.
 agenthound local -o local.json
+
+# ...or analyze a captured tarball of an OFFLINE host instead of a live scan.
+# (Capture on the target first:  tar czf capture.tgz -C ~ .aws .ssh .config .npmrc)
+agenthound offline capture.tgz -o local.json
 
 # Analyze a curated MCP server inventory file (YAML or JSON).
 agenthound mcp -i examples/mcp_inventory.yaml -o mcp.json
@@ -95,13 +141,19 @@ agenthound emit graph.json -o bloodhound.json
 
 Ingest `bloodhound.json` into BloodHound CE via Settings → Manage data → Upload, or the `/api/v2/graphs/ingest` endpoint.
 
-### End-to-end demo
+### Try it without touching your real machine
+
+Two self-contained scripts build throwaway synthetic data in a temp dir, run the
+pipeline, and clean up after themselves — nothing touches your real `$HOME`:
 
 ```bash
-bash examples/run_demo.sh
+bash examples/run_demo.sh        # full collect -> infer -> emit; prints blast-radius paths
+bash examples/try_offline.sh     # exercises `offline` mode and its safe-extraction guard
 ```
 
-Builds a synthetic developer home, runs the full pipeline, and walks the resulting graph to print the production blast-radius paths.
+`run_demo.sh` builds a synthetic developer home and walks the resulting graph to print
+the production blast-radius paths. `try_offline.sh` captures that home into a tarball and
+verifies `agenthound offline` reproduces the same graph and refuses a path-traversal archive.
 
 ## Extending the MCP server registry
 
