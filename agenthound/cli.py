@@ -84,64 +84,34 @@ def _result_to_json(result: CollectionResult, strip_branding: bool = False) -> d
 
 
 def _result_from_json(data: dict) -> CollectionResult:
+    """Read an emitted OpenGraph payload back into the internal model.
+
+    Accepts the shape AgentHound itself writes — a top-level ``graph`` wrapper
+    (or a bare ``{nodes, edges}``). Malformed input raises here and is turned
+    into a clean error by :func:`_load_collection_file`.
+    """
     result = CollectionResult()
-
-    # Support OpenGraph format or legacy intermediate format
-    if "graph" in data:
-        nodes_data = data["graph"].get("nodes", [])
-        edges_data = data["graph"].get("edges", [])
-    else:
-        nodes_data = data.get("nodes", [])
-        edges_data = data.get("edges", [])
-
-    for raw in nodes_data:
-        if "kinds" in raw:
-            # OpenGraph node
-            kinds = raw.get("kinds", [])
-            kind_str = [k for k in kinds if k != "AgentHound"][0]
-            kind = _resolve_node_kind(kind_str)
-            props = raw.get("properties", {})
-            name = props.get("name", "Unknown")
-            stable_id = props.get("stable_id", raw["id"])
-        else:
-            kind = _resolve_node_kind(raw["kind"])
-            name = raw["name"]
-            stable_id = raw["stable_id"]
-            props = raw.get("properties", {})
-
+    graph = data.get("graph", data)
+    for raw in graph.get("nodes", []):
+        kind = _resolve_node_kind([k for k in raw.get("kinds", []) if k != "AgentHound"][0])
+        props = raw.get("properties", {})
         result.nodes.append(
             Node(
                 kind=kind,
-                name=name,
-                stable_id=stable_id,
+                name=props.get("name", "Unknown"),
+                stable_id=props.get("stable_id", raw["id"]),
                 properties=props,
             )
         )
-
-    for raw in edges_data:
-        if "start" in raw:
-            # OpenGraph edge
-            kind_value = raw["kind"]
-            source_id = raw["start"]["value"]
-            target_id = raw["end"]["value"]
-            props = raw.get("properties", {})
-        else:
-            kind_value = raw["kind"]
-            source_id = raw["source_id"]
-            target_id = raw["target_id"]
-            props = raw.get("properties", {})
-
-        edge_kind = _resolve_edge_kind(kind_value)
-
+    for raw in graph.get("edges", []):
         result.edges.append(
             Edge(
-                kind=edge_kind,
-                source_id=source_id,
-                target_id=target_id,
-                properties=props,
+                kind=_resolve_edge_kind(raw["kind"]),
+                source_id=raw["start"]["value"],
+                target_id=raw["end"]["value"],
+                properties=raw.get("properties", {}),
             )
         )
-
     result.warnings = data.get("warnings", [])
     return result
 
@@ -156,7 +126,15 @@ def _load_collection_file(path: Path) -> CollectionResult:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         return _result_from_json(data)
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError, IndexError) as exc:
+    except (
+        OSError,
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        KeyError,
+        IndexError,
+        TypeError,
+        AttributeError,
+    ) as exc:
         raise click.ClickException(f"Could not read collection file {path}: {exc}") from exc
 
 
