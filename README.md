@@ -195,6 +195,8 @@ Progress is tracked in [GitHub Issues](https://github.com/Yorji-Porji/AgentHound
 - [docs/ATTACK-MAPPING.md](docs/ATTACK-MAPPING.md) — every collector and edge mapped to MITRE ATT&CK and ATLAS techniques.
 - [docs/AUTHORIZED-USE.md](docs/AUTHORIZED-USE.md) — defensive, analysis-only posture and the built-in engagement guardrails.
 - [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md) — trust boundaries, abuse cases, and what the tamper-evident audit log does and does not guarantee.
+- [docs/RELEASES.md](docs/RELEASES.md) — how releases are Sigstore-signed and how to verify a downloaded artifact's provenance.
+- [CHANGELOG.md](CHANGELOG.md) — what shipped in each release.
 
 ## Prior art
 
