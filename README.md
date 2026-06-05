@@ -19,6 +19,7 @@ The existing MCP security tool ecosystem (Snyk agent-scan, Invariant mcp-scan, C
 - **`agenthound mcp`** — parses a curated MCP server inventory file (YAML or JSON) and emits its nodes and edges. Useful for modeling documented fleets without touching each developer's machine.
 - **`agenthound infer`** — runs the coercion inference pass over collected nodes, emitting `COERCES` edges from injectable input sources through agents into the tools and identities they can reach.
 - **`agenthound emit`** — produces a BloodHound OpenGraph JSON payload ready for ingestion into BloodHound CE.
+- **`agenthound verify-audit`** — re-walks the HMAC hash-chain of an audit log written during a scoped run and reports the first line that was edited, deleted, or reordered.
 
 ## Node and edge taxonomy
 
@@ -154,6 +155,22 @@ bash examples/try_offline.sh     # exercises `offline` mode and its safe-extract
 `run_demo.sh` builds a synthetic developer home and walks the resulting graph to print
 the production blast-radius paths. `try_offline.sh` captures that home into a tarball and
 verifies `agenthound offline` reproduces the same graph and refuses a path-traversal archive.
+
+## Running under an engagement scope
+
+For authorized engagements, gate any run with a scope file. AgentHound then refuses to act
+outside it (expired authorization, denied provider/path, outside the time window) and writes a
+tamper-evident, hash-chained audit log of every decision:
+
+```bash
+export AGENTHOUND_AUDIT_KEY="your-engagement-key"   # required when the scope sets audit_log
+agenthound local --scope scope.yaml -o local.json
+agenthound verify-audit audit.jsonl                  # the audit_log path named in your scope
+```
+
+The scope file declares the engagement name, authorization expiry, allowed/denied providers and
+paths, time windows, and the audit-log path. A denied provider produces **no node and no edge** —
+the data is never collected. See [docs/AUTHORIZED-USE.md](docs/AUTHORIZED-USE.md) for the full model.
 
 ## Extending the MCP server registry
 
