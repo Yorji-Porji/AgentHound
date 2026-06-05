@@ -18,13 +18,13 @@ from agenthound.collectors.local import LocalCollector
 from agenthound.offline import UnsafeArchiveError, extracted_home
 
 
-def _make_home_tarball(tmp_path: Path, *, name: str = "capture.tar.gz") -> Path:
+def _make_home_tarball(tmp_path: Path) -> Path:
     """A tarball of a minimal home tree with an AWS credentials file."""
     home = tmp_path / "captured_home"
     aws = home / ".aws"
     aws.mkdir(parents=True)
     (aws / "credentials").write_text("[default]\n[work]\n")
-    archive = tmp_path / name
+    archive = tmp_path / "capture.tar.gz"
     with tarfile.open(archive, "w:gz") as tar:
         tar.add(home, arcname=".")
     return archive
@@ -72,9 +72,8 @@ def test_offline04_rejects_parent_traversal(tmp_path: Path):
 def test_offline05_rejects_absolute_path(tmp_path: Path):
     archive = tmp_path / "evil.tar.gz"
     info = tarfile.TarInfo(name="/etc/passwd_escape")
-    info.size = 0
     with tarfile.open(archive, "w:gz") as tar:
-        tar.addfile(info, fileobj=None)
+        tar.addfile(info)
     with pytest.raises(UnsafeArchiveError), extracted_home(archive):
         pass
 

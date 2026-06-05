@@ -42,15 +42,15 @@ def _within(root: Path, target: Path) -> bool:
 
 
 def _assert_safe(member: tarfile.TarInfo, dest: Path) -> None:
-    """Refuse any member that would escape ``dest``.
+    """Refuse any member that would extract outside ``dest``.
 
-    Covers absolute paths (POSIX ``/`` and Windows drive/UNC), parent-directory
-    traversal, and hard/symlinks whose target points outside the root.
+    ``_within`` resolves each member path (and each hard/symlink target) and
+    rejects anything landing outside the extraction root. That single check
+    covers absolute paths, ``..`` traversal, and escaping links — and does it
+    platform-correctly, since pathlib knows ``C:`` is a drive on Windows but a
+    legal filename byte on POSIX (a string heuristic cannot tell them apart).
     """
     name = member.name
-    if name.startswith(("/", "\\")) or (len(name) > 1 and name[1] == ":"):
-        raise UnsafeArchiveError(f"absolute path in archive: {name!r}")
-
     target = dest / name
     if not _within(dest, target):
         raise UnsafeArchiveError(f"path escapes extraction root: {name!r}")
@@ -72,8 +72,8 @@ def _safe_extractall(tar: tarfile.TarFile, dest: Path) -> None:
     # predate the keyword.
     try:
         tar.extractall(dest, filter="data")  # type: ignore[call-arg]
-    except TypeError:
-        tar.extractall(dest)  # noqa: S202 — members pre-validated by _assert_safe
+    except TypeError:  # pragma: no cover — Python < 3.11.4 lacks the filter kwarg
+        tar.extractall(dest)  # members already validated by _assert_safe
 
 
 @contextmanager
