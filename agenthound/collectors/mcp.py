@@ -63,8 +63,6 @@ from agenthound.schema.nodes import (
 class MCPCollector(Collector):
     """Read a curated MCP server inventory and emit the corresponding subgraph."""
 
-    name = "mcp"
-
     def __init__(
         self,
         inventory_path: Path,

@@ -207,6 +207,49 @@ def _npmrc_registries(path: Path) -> list[str]:
     return out
 
 
+# --- MCP env-var → provider inference -----------------------------------------
+#
+# A server's config hands it credentials via environment variables. The var
+# *names* (never the values) usually name the provider the server reaches —
+# AWS_*, GITHUB_TOKEN, STRIPE_API_KEY, ... For an unknown/custom server this is
+# the main signal of its access surface. Unmatched names stay generic.
+
+_ENV_PROVIDER_PATTERNS: dict[str, tuple[str, ...]] = {
+    "aws": ("AWS_",),
+    "github": ("GITHUB_", "GH_TOKEN"),
+    "gitlab": ("GITLAB_",),
+    "slack": ("SLACK_",),
+    "gcp": ("GOOGLE_", "GCP_", "GCLOUD_"),
+    "azure": ("AZURE_",),
+    "openai": ("OPENAI_",),
+    "anthropic": ("ANTHROPIC_",),
+    "salesforce": ("SALESFORCE_", "SF_"),
+    "stripe": ("STRIPE_",),
+    "notion": ("NOTION_",),
+    "linear": ("LINEAR_",),
+    "atlassian": ("JIRA_", "CONFLUENCE_", "ATLASSIAN_"),
+    "cloudflare": ("CLOUDFLARE_", "CF_API"),
+    "postgres": ("POSTGRES_", "PGPASSWORD", "PGUSER", "DATABASE_URL"),
+}
+
+
+def _providers_from_env(env_keys: Iterable[str]) -> dict[str, list[str]]:
+    """Map credential env-var *names* to the providers they reach.
+
+    Returns ``{provider: [matching env-var names]}`` — names only, values are
+    never read. A name matching no known pattern is omitted, so the caller keeps
+    the generic credential edge for it.
+    """
+    out: dict[str, list[str]] = {}
+    for key in env_keys:
+        upper = key.upper()
+        for provider, patterns in _ENV_PROVIDER_PATTERNS.items():
+            if any(upper == p or upper.startswith(p) for p in patterns):
+                out.setdefault(provider, []).append(key)
+                break
+    return out
+
+
 # ------------------------------------------------------------------------------
 
 
@@ -224,8 +267,6 @@ class LocalCollector(Collector):
         Path to a YAML registry overlay. Entries here override or extend the
         bundled default.
     """
-
-    name = "local"
 
     def __init__(
         self,
@@ -344,9 +385,12 @@ class LocalCollector(Collector):
             classification = ["unclassified"]
             provider = "unknown"
         else:
-            tools = known["tools"]
-            classification = known["classification"]
-            provider = known["provider"]
+            # Fail soft on a malformed --known-servers overlay: an entry missing
+            # a key falls back to the unknown-server defaults rather than raising
+            # KeyError mid-scan.
+            tools = known.get("tools", ["__unknown__"])
+            classification = known.get("classification", ["unclassified"])
+            provider = known.get("provider", "unknown")
 
         # Scope: a denied provider produces no node and no edge for this server.
         if not self.allow_provider(provider, f"mcp:{server_name}"):
@@ -383,8 +427,10 @@ class LocalCollector(Collector):
             Edge(PermissionEdgeKind.AUTHENTICATES_AS, server.objectid, nhi.objectid)
         )
 
-        # If the config references environment variables, the runtime is the
-        # source of those creds — record a CAN_READ_CRED edge.
+        # The credentials a server's config hands it map its real access surface.
+        # The runtime can read those creds (generic edge), and recognized env-var
+        # *names* are attributed to their provider so a custom server's access
+        # (aws, github, stripe, ...) is mapped, not left as a blank "unknown".
         if isinstance(server_cfg, dict):
             env = server_cfg.get("env") or {}
             if env:
@@ -396,6 +442,32 @@ class LocalCollector(Collector):
                         properties={"via": "mcp_env", "env_keys": sorted(env.keys())},
                     )
                 )
+                for cred_provider, keys in _providers_from_env(env.keys()).items():
+                    if cred_provider == provider:
+                        continue  # already the server's own identity
+                    if not self.allow_provider(cred_provider, f"mcp:{server_name}:{cred_provider}"):
+                        continue  # denied by scope — no node, no edge
+                    cred_nhi = nhi_node(
+                        provider=cred_provider,
+                        identifier=server_name,
+                        nhi_type="mcp_env_credential",
+                    )
+                    result.nodes.append(cred_nhi)
+                    result.edges.extend(
+                        [
+                            Edge(
+                                PermissionEdgeKind.AUTHENTICATES_AS,
+                                server.objectid,
+                                cred_nhi.objectid,
+                            ),
+                            Edge(
+                                PermissionEdgeKind.CAN_READ_CRED,
+                                runtime.objectid,
+                                cred_nhi.objectid,
+                                properties={"via": "mcp_env", "env_keys": sorted(keys)},
+                            ),
+                        ]
+                    )
 
     # -- Credentials -----------------------------------------------------------
 

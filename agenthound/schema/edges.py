@@ -50,8 +50,8 @@ class Edge:
     `source_id` and `target_id` are node objectids (see Node.objectid).
 
     Coercion edges carry an `injection_class` property naming the technique
-    (direct, indirect, stored, shadow, schema_poisoning, tool_poisoning). This
-    is how Cypher queries can rank paths by exploit difficulty.
+    (direct, indirect, stored, shadow). This is how Cypher queries can rank
+    paths by exploit difficulty.
     """
 
     kind: EdgeKind

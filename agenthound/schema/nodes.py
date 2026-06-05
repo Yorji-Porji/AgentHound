@@ -62,13 +62,9 @@ class Node:
         return f"AH-{self.kind.value}-{digest[:16]}"
 
 
-def agent_node(
-    name: str, kind_detail: str, version: str | None = None, install_path: str | None = None
-) -> Node:
+def agent_node(name: str, kind_detail: str, install_path: str | None = None) -> Node:
     """Build an Agent node for a detected AI assistant."""
     props: dict[str, Any] = {"agent_kind": kind_detail}
-    if version:
-        props["version"] = version
     if install_path:
         props["install_path"] = install_path
     return Node(kind=NodeKind.AGENT, name=name, stable_id=f"{kind_detail}:{name}", properties=props)
@@ -165,8 +161,8 @@ def injectable_input_node(source_kind: str, descriptor: str) -> Node:
     """Build an InjectableInput node.
 
     `source_kind` describes the channel: `web_fetch`, `rag_index`, `email`,
-    `filesystem`, `attached_file`, `external_repo_readme`. `descriptor` is a
-    short label for the specific source (e.g. URL pattern, index name).
+    `filesystem`. `descriptor` is a short label for the specific source
+    (e.g. URL pattern, index name).
     """
     return Node(
         kind=NodeKind.INJECTABLE_INPUT,

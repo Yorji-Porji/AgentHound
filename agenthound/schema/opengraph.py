@@ -20,7 +20,6 @@ from agenthound.schema.edges import Edge
 from agenthound.schema.nodes import Node
 
 SOURCE_KIND = "AgentHound"
-MAX_KINDS = 3
 
 # BloodHound built-in edge kinds — warn loudly if we collide with one
 RESERVED_KINDS = {
@@ -66,7 +65,6 @@ def _sanitize_kind(s: str) -> str:
         return token
 
     result = "".join(_title_case(token) for token in tokens if token)
-    result = re.sub(r"[^A-Za-z0-9]", "", result)
 
     if result in RESERVED_KINDS:
         warnings.warn(
@@ -138,13 +136,6 @@ def _serialize_node(node: Node, strip_branding: bool) -> dict[str, Any]:
 
     if not strip_branding:
         kinds.append(SOURCE_KIND)
-
-    if len(kinds) > MAX_KINDS:
-        warnings.warn(
-            f"Node '{node.name}' has {len(kinds)} kinds — truncating to {MAX_KINDS}.",
-            stacklevel=2,
-        )
-        kinds = kinds[:MAX_KINDS]
 
     # NOTE: `objectid` deliberately does NOT go in properties. BloodHound's
     # generic-ingest node schema forbids it there (`property_map` carries a
