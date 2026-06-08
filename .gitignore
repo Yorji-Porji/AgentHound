@@ -63,3 +63,5 @@ mcp.json
 graph.json
 audit.jsonl
 engagement-audit.jsonl
+# Local engagement scope files — host-specific, not part of the project.
+scope.yaml

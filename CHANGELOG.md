@@ -21,6 +21,11 @@ prompt-injection reachability.
   path traversal or escaping links); produces the same graph as `local`.
 - **`agenthound mcp`** — model a documented MCP-server fleet from a YAML/JSON
   inventory without touching each developer's machine.
+- **Unknown-tool access mapping** — for custom or unrecognized MCP servers,
+  AgentHound infers which credential providers a server can reach (AWS, GitHub,
+  GCP, Slack, Stripe, …) from its declared environment-variable **names** —
+  never their values — and emits the backing NHI and credential-read edges,
+  scope permitting. Unclassified tools are treated as injection sources.
 - **`agenthound infer`** — coercion inference pass emitting `COERCES` edges from
   injectable input sources through agents into the tools and identities they
   reach.
@@ -37,5 +42,12 @@ prompt-injection reachability.
   authorized-use posture (`docs/`).
 - **Signed releases** — wheel and sdist are Sigstore-signed in CI; see
   [docs/RELEASES.md](docs/RELEASES.md) to verify a download.
+
+### Security
+
+- `verify-audit` now rejects log lines that carry fields outside the signed set,
+  closing an unsigned-field-injection gap in chain verification.
+- Malformed collection files and partial overlay records fail soft (a clear
+  error or a skipped record) instead of crashing the CLI.
 
 [0.2.0]: https://github.com/Yorji-Porji/AgentHound/releases/tag/v0.2.0
