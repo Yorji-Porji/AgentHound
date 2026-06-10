@@ -152,6 +152,62 @@ def _aws_profile_names(path: Path) -> list[str]:
     return profiles
 
 
+def _parse_role_arn(arn: str) -> tuple[str | None, str | None, str | None]:
+    """Split an IAM role ARN into ``(account_id, role_name, partition)``.
+
+    ``arn:aws:iam::123456789012:role/path/Name`` -> ``("123456789012", "Name",
+    "aws")``. Returns ``None`` fields for anything that is not a role ARN; the
+    caller still emits the role NHI keyed on the raw ARN, just without the
+    decomposed properties. An ARN is an identifier, never a secret.
+    """
+    parts = arn.split(":")
+    if len(parts) < 6 or parts[0] != "arn" or parts[2] != "iam":
+        return None, None, None
+    partition = parts[1] or None
+    account_id = parts[4] or None
+    resource = parts[5]
+    if not resource.startswith("role/"):
+        return account_id, None, partition
+    role_name = resource[len("role/") :].rsplit("/", 1)[-1] or None
+    return account_id, role_name, partition
+
+
+def _aws_assume_roles(path: Path) -> list[dict[str, str]]:
+    """Parse ``~/.aws/config`` for assume-role profiles. Values are not secrets.
+
+    Returns one dict per profile that declares a ``role_arn``, carrying the
+    non-secret assume-role wiring only: ``profile``, ``role_arn``,
+    ``source_profile``, ``mfa_serial``, ``credential_source``. These are
+    identifiers and config (an ARN, an MFA *device* serial) — never a credential
+    value. This is topology ("X can assume role Y"); what the role is allowed to
+    do needs IAM, not this file (see the ``aws-iam`` collector).
+    """
+    sections: list[dict[str, str]] = []
+    current: dict[str, str] | None = None
+    try:
+        text = path.read_text()
+    except OSError:
+        return sections
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            name = line[1:-1].strip()
+            if name.startswith("profile "):
+                name = name[len("profile ") :].strip()
+            current = {"profile": name}
+            sections.append(current)
+            continue
+        if current is None or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip().lower(), value.strip()
+        if value and key in {"role_arn", "source_profile", "mfa_serial", "credential_source"}:
+            current[key] = value
+    return [s for s in sections if "role_arn" in s]
+
+
 def _gh_hosts(path: Path) -> list[str]:
     """Parse gh CLI hosts file for hostnames and usernames. Tokens are not read."""
     out: list[str] = []
@@ -505,6 +561,43 @@ class LocalCollector(Collector):
                 self._add_cred_nhi(
                     runtime, result, provider="aws", identifier=profile,
                     nhi_type="aws_profile", via=str(cred_file),
+                )
+
+        # AWS assume-role topology. ~/.aws/config wires a profile to a role it
+        # may assume (role_arn + source_profile) — non-secret config. Emit the
+        # role as its own NHI and a CAN_ASSUME edge from the source profile's NHI
+        # (same objectid as the profile NHI above, so they join into one node).
+        # Topology only; what the role can *do* needs IAM (see the aws-iam collector).
+        aws_config = self.home / ".aws" / "config"
+        if self._cred_allowed("aws", aws_config):
+            for entry in _aws_assume_roles(aws_config):
+                source_profile = entry.get("source_profile")
+                if not source_profile:
+                    continue  # credential_source-only roles have no local source identity
+                account_id, role_name, _partition = _parse_role_arn(entry["role_arn"])
+                requires_mfa = "mfa_serial" in entry
+                role = nhi_node(
+                    provider="aws", identifier=entry["role_arn"], nhi_type="assumed_role"
+                )
+                role.properties["role_name"] = role_name or entry["role_arn"]
+                role.properties["requires_mfa"] = requires_mfa
+                if account_id:
+                    role.properties["account_id"] = account_id
+                source = nhi_node(
+                    provider="aws", identifier=source_profile, nhi_type="aws_profile"
+                )
+                result.nodes.extend([source, role])
+                result.edges.append(
+                    Edge(
+                        PermissionEdgeKind.CAN_ASSUME,
+                        source.objectid,
+                        role.objectid,
+                        properties={
+                            "requires_mfa": requires_mfa,
+                            "account_id": account_id or "unknown",
+                            "via": str(aws_config),
+                        },
+                    )
                 )
 
         # GitHub CLI

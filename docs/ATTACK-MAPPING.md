@@ -82,6 +82,7 @@ access." They are the substrate the coercion analysis runs over.
 | `AUTHENTICATES_AS` | MCPServer/MCPTool → NHI | **T1078** Valid Accounts | **AML.T0012** Valid Accounts |
 | `CAN_READ_CRED` | AgentRuntime → NHI (credential pickup) | **T1552.001** Credentials In Files | **AML.T0055** Unsecured Credentials |
 | `GRANTS_ACCESS` | NHI → Resource | **T1078.004** Valid Accounts: Cloud | **AML.T0012** Valid Accounts |
+| `CAN_ASSUME` | NHI → NHI (one identity can assume-role into another) | **T1548** Abuse Elevation Control Mechanism / **T1078.004** Valid Accounts: Cloud | **AML.T0012** Valid Accounts |
 
 ### Coercion edges (`CoercionEdgeKind`) — the differentiator
 

@@ -30,6 +30,7 @@ class PermissionEdgeKind(str, Enum):
     AUTHENTICATES_AS = "AUTHENTICATES_AS"  # MCPServer/MCPTool → NHI
     GRANTS_ACCESS = "GRANTS_ACCESS"  # NHI → Resource
     CAN_READ_CRED = "CAN_READ_CRED"  # AgentRuntime → NHI (cred pickup)
+    CAN_ASSUME = "CAN_ASSUME"  # NHI → NHI (assume-role / cross-identity impersonation)
 
 
 class CoercionEdgeKind(str, Enum):

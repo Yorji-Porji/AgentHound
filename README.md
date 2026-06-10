@@ -45,6 +45,7 @@ The existing MCP security tool ecosystem (Snyk agent-scan, Invariant mcp-scan, C
 | `AUTHENTICATES_AS` | MCPServer/MCPTool → NHI |
 | `GRANTS_ACCESS` | NHI → Resource |
 | `CAN_READ_CRED` | AgentRuntime → NHI |
+| `CAN_ASSUME` | NHI → NHI (assume-role / impersonation) |
 
 ### Coercion edges (novel)
 | Edge | From → To |

@@ -4,6 +4,18 @@ Notable changes to AgentHound. The format is loosely based on
 [Keep a Changelog](https://keepachangelog.com/). AgentHound is in **alpha** —
 the graph schema and CLI surface may change between releases.
 
+## [Unreleased]
+
+### Added
+
+- **AWS assume-role topology** — `agenthound local` now reads the `role_arn` /
+  `source_profile` wiring in `~/.aws/config` and emits each assumable role as its
+  own NHI plus a new **`CAN_ASSUME`** edge (identity → role), exposing local
+  privilege-escalation chains (e.g. `default → … → OrgAdmin`, possibly
+  cross-account). Read from on-disk config only — **no network, no credential
+  values**; *what* a role can do is left to the `aws-iam` collector. Ships with an
+  `aws_role_assumption_escalation` Cypher query.
+
 ## [0.2.0] — 2026-06-05
 
 First tagged release. AgentHound is a [BloodHound OpenGraph](https://specterops.io/opengraph/)

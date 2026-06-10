@@ -91,3 +91,22 @@ queries:
       MATCH (s:MCPServer)-[:Exposes]->(t:MCPTool)
       WHERE any(c IN t.classification WHERE c = 'unclassified')
       RETURN s.name AS server, s.config_source AS config_path
+
+  - id: aws_role_assumption_escalation
+    title: AWS privilege escalation via role-assumption chains
+    description: >
+      Walks the CanAssume graph from local AWS profiles. Each hop is one
+      assume-role wiring (role_arn + source_profile) in a developer's
+      ~/.aws/config; chained together they reveal an identity that can reach far
+      more powerful roles than it holds directly — often across accounts.
+      Topology only: what each role can actually DO comes from the aws-iam
+      collector's GrantsAccess edges.
+    risk_category: critical
+    cypher: |
+      MATCH path = (start:Nhi)-[:CanAssume*1..5]->(role:Nhi)
+      WHERE start.nhi_type = 'aws_profile'
+      RETURN start.name  AS from_identity,
+             role.name   AS reachable_role,
+             length(path) AS hops
+      ORDER BY hops DESC
+      LIMIT 25
