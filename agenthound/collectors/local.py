@@ -177,7 +177,7 @@ def _aws_assume_roles(path: Path) -> list[dict[str, str]]:
 
     Returns one dict per profile that declares a ``role_arn``, carrying the
     non-secret assume-role wiring only: ``profile``, ``role_arn``,
-    ``source_profile``, ``mfa_serial``, ``credential_source``. These are
+    ``source_profile``, and ``mfa_serial``. These are
     identifiers and config (an ARN, an MFA *device* serial) — never a credential
     value. This is topology ("X can assume role Y"); what the role is allowed to
     do needs IAM, not this file (see the ``aws-iam`` collector).
@@ -203,7 +203,7 @@ def _aws_assume_roles(path: Path) -> list[dict[str, str]]:
             continue
         key, _, value = line.partition("=")
         key, value = key.strip().lower(), value.strip()
-        if value and key in {"role_arn", "source_profile", "mfa_serial", "credential_source"}:
+        if value and key in {"role_arn", "source_profile", "mfa_serial"}:
             current[key] = value
     return [s for s in sections if "role_arn" in s]
 
@@ -574,7 +574,7 @@ class LocalCollector(Collector):
                 source_profile = entry.get("source_profile")
                 if not source_profile:
                     continue  # credential_source-only roles have no local source identity
-                account_id, role_name, _partition = _parse_role_arn(entry["role_arn"])
+                account_id, role_name, partition = _parse_role_arn(entry["role_arn"])
                 requires_mfa = "mfa_serial" in entry
                 role = nhi_node(
                     provider="aws", identifier=entry["role_arn"], nhi_type="assumed_role"
@@ -583,6 +583,9 @@ class LocalCollector(Collector):
                 role.properties["requires_mfa"] = requires_mfa
                 if account_id:
                     role.properties["account_id"] = account_id
+                # A non-aws partition (gov/cn) is a real isolation boundary; flag it.
+                if partition and partition != "aws":
+                    role.properties["partition"] = partition
                 source = nhi_node(
                     provider="aws", identifier=source_profile, nhi_type="aws_profile"
                 )

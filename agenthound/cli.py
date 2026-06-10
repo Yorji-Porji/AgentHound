@@ -39,7 +39,7 @@ from pydantic import ValidationError
 
 from agenthound import __version__
 from agenthound.audit import AuditError, AuditLog, verify_audit_log
-from agenthound.collectors.aws_iam import AWSIAMCollector
+from agenthound.collectors.aws_iam import AWSIAMCollector, AWSIAMExportError
 from agenthound.collectors.base import CollectionResult
 from agenthound.collectors.local import LocalCollector
 from agenthound.collectors.mcp import MCPCollector
@@ -364,7 +364,7 @@ def cmd_aws_iam(
     try:
         collector = AWSIAMCollector(import_path, guard=guard, audit=audit)
         result = collector.collect()
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, AWSIAMExportError) as exc:
         raise click.ClickException(
             f"Could not read AWS IAM export {import_path}: {exc}"
         ) from exc

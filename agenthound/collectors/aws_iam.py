@@ -13,7 +13,9 @@ Emitted subgraph (all under the ``aws`` scope gate):
   local-config view and the authoritative IAM view attach to the same node).
 - **evidence-based admin flag**: ``grants_full_access`` is set from policy
   *content* — the managed ``AdministratorAccess`` ARN, or an ``Allow`` of action
-  ``*`` on resource ``*`` — **never from the principal's name**.
+  ``*`` on resource ``*`` — **never from the principal's name**. This reflects
+  *granted* policy, not the *effective* set after explicit ``Deny``, permission
+  boundaries, or SCPs; ``iam:SimulatePrincipalPolicy`` is the authoritative oracle.
 - ``NHI -> Resource`` ``GRANTS_ACCESS`` edges from each ``Allow`` statement's
   resource ARNs (wildcard ``*`` becomes one ``aws:*:*`` resource).
 - ``CAN_ASSUME`` edges from each role's trust policy (its authoritative assumers).
@@ -41,6 +43,10 @@ from agenthound.schema.nodes import Node, nhi_node, resource_node
 # is AWS's own managed policy, not a customer label. Admin-ness keys on this ARN
 # (and on Action:* Resource:* statements), never on what a customer named a role.
 ADMIN_POLICY_ARN = "arn:aws:iam::aws:policy/AdministratorAccess"
+
+
+class AWSIAMExportError(ValueError):
+    """The uploaded file is not a usable IAM authorization-details export."""
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -108,7 +114,7 @@ class AWSIAMCollector(Collector):
         # clean ClickException (matching the fail-soft posture elsewhere).
         data = json.loads(self.import_path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
-            raise ValueError(
+            raise AWSIAMExportError(
                 "export root must be a JSON object "
                 "(from `aws iam get-account-authorization-details`)"
             )
@@ -118,16 +124,26 @@ class AWSIAMCollector(Collector):
             return result
 
         managed = _index_managed_policies(_as_list(data.get("Policies")))
+        roles = [r for r in _as_list(data.get("RoleDetailList")) if isinstance(r, dict)]
+        users = [u for u in _as_list(data.get("UserDetailList")) if isinstance(u, dict)]
 
-        for user in _as_list(data.get("UserDetailList")):
-            if isinstance(user, dict):
-                self._emit_principal(user, "iam_user", managed, result)
-        for role in _as_list(data.get("RoleDetailList")):
-            if not isinstance(role, dict):
-                continue
-            nhi = self._emit_principal(role, "iam_role", managed, result)
-            if nhi is not None:
-                self._emit_trust(role, nhi, result)
+        # Phase 1: trust placeholders + CAN_ASSUME edges first. A role's objectid
+        # is deterministic from its ARN, so trust edges can be wired before the
+        # rich role node exists. Emitting the (possibly placeholder) assumers now
+        # means the rich principal nodes in phase 2 win build_payload's later-wins
+        # property merge — a user that is also a trust principal keeps its
+        # iam_user identity instead of being clobbered to aws_principal.
+        for role in roles:
+            arn = role.get("Arn")
+            if isinstance(arn, str) and arn:
+                target = nhi_node(provider="aws", identifier=arn, nhi_type="iam_role")
+                self._emit_trust(role, target, result)
+
+        # Phase 2: the rich principal definitions, emitted last so they win.
+        for user in users:
+            self._emit_principal(user, "iam_user", managed, result)
+        for role in roles:
+            self._emit_principal(role, "iam_role", managed, result)
 
         return result
 

@@ -308,3 +308,17 @@ def test_principal_without_arn_skipped(tmp_path: Path):
     result = _collect(tmp_path, {"RoleDetailList": [{"RoleName": "noarn"}]})
     assert _principals(result.nodes) == {}
     assert any("no Arn" in w for w in result.warnings)
+
+
+def test_joined_user_keeps_iam_user_type_after_emit():
+    # ci-deployer is both a user and a trust-policy assumer of two roles. After
+    # build_payload merges the two same-objectid nodes, the rich user must win:
+    # nhi_type stays iam_user, not the aws_principal placeholder (audit F1).
+    result = AWSIAMCollector(EXAMPLE).collect()
+    payload = build_payload(result.nodes, result.edges).to_dict()
+    deployer = next(
+        n
+        for n in payload["graph"]["nodes"]
+        if n["properties"].get("principal_name") == "ci-deployer"
+    )
+    assert deployer["properties"]["nhi_type"] == "iam_user"

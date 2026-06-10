@@ -109,6 +109,7 @@ def test_collector_emits_role_nhi_and_can_assume(tmp_path: Path):
     for r in roles:
         assert r.properties["account_id"] == "111122223333"
         assert r.properties["provider"] == "aws"
+        assert "partition" not in r.properties  # standard aws partition is implicit
 
 
 def test_can_assume_joins_existing_profile_nhi(tmp_path: Path):
@@ -185,3 +186,14 @@ def test_can_assume_survives_emit_roundtrip(tmp_path: Path):
     payload = build_payload(result.nodes, result.edges).to_dict()
     restored = _result_from_json(payload)
     assert any(e.kind == PermissionEdgeKind.CAN_ASSUME for e in restored.edges)
+
+
+def test_govcloud_role_records_partition(tmp_path: Path):
+    # A non-aws partition (gov/cn) is an isolation boundary worth surfacing.
+    config = (
+        "[profile gov]\n"
+        "role_arn = arn:aws-us-gov:iam::1:role/GovAdmin\n"
+        "source_profile = default\n"
+    )
+    role = _roles(_collect(tmp_path, config=config).nodes)[0]
+    assert role.properties.get("partition") == "aws-us-gov"
