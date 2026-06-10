@@ -110,3 +110,19 @@ queries:
              length(path) AS hops
       ORDER BY hops DESC
       LIMIT 25
+
+  - id: injection_to_full_access_identity
+    title: Injection paths reaching an admin / full-access AWS identity
+    description: >
+      The aws-iam collector flags identities whose policies grant unrestricted
+      access (grants_full_access). This finds untrusted-content sources that can
+      coerce an agent into a tool backed by such an identity — independent of
+      resource tier (aws-iam resources are tier-unknown until tagged, so this
+      complements the production-tier blast-radius query).
+    risk_category: critical
+    cypher: |
+      MATCH path = (i:InjectableInput)-[:Coerces]->(a:Agent)
+             -[:CallsTool*1..4]->(t:MCPTool)-[:AuthenticatesAs]->(n:Nhi)
+      WHERE n.grants_full_access = true
+      RETURN path
+      LIMIT 25

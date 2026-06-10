@@ -11,6 +11,9 @@ Emitted subgraph (all under the ``aws`` scope gate):
 - each user / role -> an ``NHI`` keyed on its **ARN**, so a role here joins the
   ``assumed_role`` NHI the ``local`` collector draws from ``~/.aws/config`` (the
   local-config view and the authoritative IAM view attach to the same node).
+  Note this join is at the **role** level (both key roles by ARN); the *assuming*
+  identity does not join — ``local`` keys it by profile name and ``aws-iam`` by
+  ARN, and resolving one to the other needs an API call this tool never makes.
 - **evidence-based admin flag**: ``grants_full_access`` is set from policy
   *content* — the managed ``AdministratorAccess`` ARN, or an ``Allow`` of action
   ``*`` on resource ``*`` — **never from the principal's name**. This reflects
@@ -153,11 +156,11 @@ class AWSIAMCollector(Collector):
         nhi_type: str,
         managed: dict[str, Any],
         result: CollectionResult,
-    ) -> Node | None:
+    ) -> None:
         arn = principal.get("Arn")
         if not isinstance(arn, str) or not arn:
             result.warnings.append(f"Skipping IAM {nhi_type} with no Arn.")
-            return None
+            return
 
         nhi = nhi_node(provider="aws", identifier=arn, nhi_type=nhi_type)
         nhi.properties["principal_name"] = (
@@ -194,10 +197,15 @@ class AWSIAMCollector(Collector):
                         r for r in _as_list(stmt.get("Resource")) if isinstance(r, str)
                     )
 
+        # An admin reaches everything; guarantee a reachability edge even when the
+        # granting policy's body isn't in the export (e.g. AWS-managed
+        # AdministratorAccess, whose document is often omitted).
+        if full_access:
+            resources_allowed.add("*")
+
         nhi.properties["grants_full_access"] = full_access
         result.nodes.append(nhi)
         self._emit_resources(nhi, resources_allowed, result)
-        return nhi
 
     def _emit_resources(
         self, nhi: Node, resources: set[str], result: CollectionResult

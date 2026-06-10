@@ -149,6 +149,20 @@ def test_wildcard_resource_emitted():
     assert wildcards and wildcards[0].properties["resource_kind"] == "*"
 
 
+def test_admin_without_policy_doc_still_reaches_wildcard():
+    # OrgAdmin's admin comes from the AdministratorAccess *ARN* (no document in the
+    # export), yet it must still emit a GrantsAccess to the wildcard resource so the
+    # most dangerous identities are not graph dead-ends (audit R1).
+    result = AWSIAMCollector(EXAMPLE).collect()
+    org_admin = _principals(result.nodes)["OrgAdmin"]
+    assert org_admin.properties["grants_full_access"] is True
+    targets = {e.target_id for e in _grants(result.edges) if e.source_id == org_admin.objectid}
+    wildcard = next(
+        n for n in result.nodes if n.kind == NodeKind.RESOURCE and n.properties.get("wildcard")
+    )
+    assert wildcard.objectid in targets
+
+
 # --- CAN_ASSUME from trust policies ------------------------------------------
 
 def test_can_assume_from_trust_policy():
