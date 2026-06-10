@@ -18,9 +18,11 @@ it never executes any of them. The mapping below is "what an operator looking
 at this graph is reasoning about," not "what the tool does."
 
 > Scope note: the table reflects edges the current collectors actually emit
-> (`local`, `mcp`). Cloud-side enumeration (a dedicated AWS/IAM collector) is
-> Phase 2 — `GRANTS_ACCESS` ships today only when a `mcp` inventory file
-> declares resources explicitly.
+> (`local`, `mcp`, `aws-iam`). `GRANTS_ACCESS` is emitted from a `mcp` inventory's
+> declared resources and, as of Phase 2, from **real AWS policies** via the
+> `aws-iam` collector (an uploaded IAM export — no live API). `CAN_ASSUME` comes
+> from `local` (`~/.aws/config` assume-role wiring) and from role trust policies
+> in `aws-iam`.
 
 ---
 

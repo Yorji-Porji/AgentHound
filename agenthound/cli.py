@@ -39,6 +39,7 @@ from pydantic import ValidationError
 
 from agenthound import __version__
 from agenthound.audit import AuditError, AuditLog, verify_audit_log
+from agenthound.collectors.aws_iam import AWSIAMCollector
 from agenthound.collectors.base import CollectionResult
 from agenthound.collectors.local import LocalCollector
 from agenthound.collectors.mcp import MCPCollector
@@ -333,6 +334,41 @@ def cmd_mcp(inventory: Path, output: Path | None, no_branding: bool, scope: Path
     guard, audit = _activate_scope(scope)
     collector = MCPCollector(inventory_path=inventory, guard=guard, audit=audit)
     _write_result(collector.collect(), output, strip_branding=no_branding)
+
+
+@main.command("aws-iam")
+@click.option(
+    "--import", "-i", "import_path",
+    type=click.Path(path_type=Path, exists=True), required=True,
+    help="An `aws iam get-account-authorization-details` JSON export to resolve.",
+)
+@click.option("--output", "-o", type=click.Path(path_type=Path), default=None)
+@click.option("--no-branding", is_flag=True, help="Strip AgentHound branding for clean merges.")
+@click.option(
+    "--scope",
+    type=click.Path(path_type=Path, exists=True),
+    default=None,
+    help="Engagement scope YAML. Enforces provider/path/time limits and audit logging.",
+)
+def cmd_aws_iam(
+    import_path: Path, output: Path | None, no_branding: bool, scope: Path | None
+) -> None:
+    """Resolve real AWS permissions from an uploaded IAM export (network-free).
+
+    Run `aws iam get-account-authorization-details > iam.json` yourself, then
+    feed the file here — AgentHound never calls AWS. Emits the identities, the
+    resources their policies grant, evidence-based admin flags, and CAN_ASSUME
+    edges from role trust policies.
+    """
+    guard, audit = _activate_scope(scope)
+    try:
+        collector = AWSIAMCollector(import_path, guard=guard, audit=audit)
+        result = collector.collect()
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise click.ClickException(
+            f"Could not read AWS IAM export {import_path}: {exc}"
+        ) from exc
+    _write_result(result, output, strip_branding=no_branding)
 
 
 @main.command("infer")
