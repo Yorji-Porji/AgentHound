@@ -53,11 +53,45 @@ cat > "$HOME_DIR/.config/Claude/claude_desktop_config.json" <<'EOF'
 }
 EOF
 
-# Fake credentials — metadata only; AgentHound never reads secret values.
+# A realistic ~/.aws, the way a real developer machine looks — but with NO secret
+# values. AWS splits its config across two files, and AgentHound reads only the
+# parts that are safe to read:
+#
+#   ~/.aws/credentials  -> long-lived IAM keys live here. AgentHound reads the
+#                          [profile] NAMES only, never the key values. This demo
+#                          writes no key values at all, to prove the point.
+#   ~/.aws/config       -> non-secret settings: region, output, and assume-role
+#                          chains (role_arn + source_profile). Those role_arn
+#                          lines are the "blast-radius" breadcrumbs a future
+#                          release will resolve into the resources each role
+#                          can actually reach.
 cat > "$HOME_DIR/.aws/credentials" <<'EOF'
+# On a real box the secret keys would live here, e.g.:
+#   [default]
+#   aws_access_key_id     = AKIAIOSFODNN7EXAMPLE        # an identifier, not a secret
+#   aws_secret_access_key = wJalrXUtnFEMI/...EXAMPLE    # the SECRET — never logged
+# Only [default] holds real keys; the prod-* profiles are *assumed* roles that
+# chain off it (see ~/.aws/config below), so they don't appear here.
 [default]
-[prod-readonly]
-[prod-admin]
+EOF
+
+cat > "$HOME_DIR/.aws/config" <<'EOF'
+[default]
+region = us-east-1
+output = json
+
+# A read-only role this developer can assume by chaining off [default]'s keys.
+[profile prod-readonly]
+region = us-east-1
+role_arn = arn:aws:iam::111122223333:role/ReadOnlyAuditor
+source_profile = default
+
+# A high-privilege role — the blast-radius target. Assuming it requires MFA.
+[profile prod-admin]
+region = us-east-1
+role_arn = arn:aws:iam::111122223333:role/OrgAdmin
+source_profile = default
+mfa_serial = arn:aws:iam::111122223333:mfa/alice
 EOF
 touch "$HOME_DIR/.ssh/id_ed25519.pub"
 cat > "$HOME_DIR/.config/gh/hosts.yml" <<'EOF'
