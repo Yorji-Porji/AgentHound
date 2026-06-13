@@ -15,6 +15,13 @@ the graph schema and CLI surface may change between releases.
   cross-account). Read from on-disk config only — **no network, no credential
   values**; *what* a role can do is left to the `aws-iam` collector. Ships with an
   `aws_role_assumption_escalation` Cypher query.
+- **`agenthound aws-iam`** — resolves *real* AWS permissions from an uploaded
+  `aws iam get-account-authorization-details` export: identities, the resources
+  their policies grant (`GRANTS_ACCESS`), an **evidence-based** admin flag (the
+  managed `AdministratorAccess` ARN or an `Allow *` on `*` — never the role's
+  name), and `CAN_ASSUME` edges from role trust policies. Upload-only — **the
+  tool never calls AWS**, so it stays network-free. Role NHIs are keyed on their
+  ARN, so they join the assume-role topology `local` discovers.
 
 ## [0.2.0] — 2026-06-05
 

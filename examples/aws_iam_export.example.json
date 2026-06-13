@@ -1,0 +1,79 @@
+{
+  "_comment": "Tiny sample of `aws iam get-account-authorization-details` output. Run that read-only command yourself and feed the real file to `agenthound aws-iam --import <file>`. AgentHound never calls AWS. Note: the `OrgAdmin` role is flagged admin because it carries the AdministratorAccess policy, and the blandly-named `ci-deployer` user is flagged admin because of an inline Action:* Resource:* statement — admin comes from policy evidence, not the name.",
+  "UserDetailList": [
+    {
+      "UserName": "ci-deployer",
+      "UserId": "AIDAEXAMPLE0000USER",
+      "Arn": "arn:aws:iam::111122223333:user/ci-deployer",
+      "AttachedManagedPolicies": [],
+      "UserPolicyList": [
+        {
+          "PolicyName": "inline-everything",
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              { "Effect": "Allow", "Action": "*", "Resource": "*" }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "GroupDetailList": [],
+  "RoleDetailList": [
+    {
+      "RoleName": "OrgAdmin",
+      "RoleId": "AROAEXAMPLE0001ADMIN",
+      "Arn": "arn:aws:iam::111122223333:role/OrgAdmin",
+      "AssumeRolePolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": { "AWS": "arn:aws:iam::111122223333:user/ci-deployer" },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      },
+      "AttachedManagedPolicies": [
+        {
+          "PolicyName": "AdministratorAccess",
+          "PolicyArn": "arn:aws:iam::aws:policy/AdministratorAccess"
+        }
+      ],
+      "RolePolicyList": []
+    },
+    {
+      "RoleName": "ReadOnlyAuditor",
+      "RoleId": "AROAEXAMPLE0002AUDIT",
+      "Arn": "arn:aws:iam::111122223333:role/ReadOnlyAuditor",
+      "AssumeRolePolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": { "AWS": "arn:aws:iam::111122223333:user/ci-deployer" },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      },
+      "AttachedManagedPolicies": [],
+      "RolePolicyList": [
+        {
+          "PolicyName": "read-prod-bucket",
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": ["s3:GetObject", "s3:ListBucket"],
+                "Resource": "arn:aws:s3:::acme-prod-data/*"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "Policies": []
+}
