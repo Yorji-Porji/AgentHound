@@ -6,6 +6,13 @@ the graph schema and CLI surface may change between releases.
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-06-13
+
+Corrective release: ships the AWS collectors that the `v0.2.0` tag documented but
+never actually contained — they had merged into a feature branch that was not
+re-landed on `main`. No behavioural changes beyond first delivery of the code
+below.
+
 ### Added
 
 - **AWS assume-role topology** — `agenthound local` now reads the `role_arn` /
@@ -69,4 +76,5 @@ prompt-injection reachability.
 - Malformed collection files and partial overlay records fail soft (a clear
   error or a skipped record) instead of crashing the CLI.
 
+[0.2.1]: https://github.com/Yorji-Porji/AgentHound/releases/tag/v0.2.1
 [0.2.0]: https://github.com/Yorji-Porji/AgentHound/releases/tag/v0.2.0
