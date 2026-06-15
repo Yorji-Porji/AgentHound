@@ -1,0 +1,64 @@
+{
+  "_comment": "Tiny sample Azure RBAC export. Build the real one yourself (network-free): `az role assignment list --all -o json` for roleAssignments and `az role definition list -o json` for roleDefinitions, combined into this shape, then run `agenthound azure-rbac --import <file>`. AgentHound never calls Azure. The Owner service principal is flagged admin from policy content (action '*' with no notActions); Contributor is NOT (its notActions remove access management) even though it also has '*'. Admin comes from the role definition, never from a name. The role-definition GUIDs are the real built-in Owner/Reader/Contributor ids.",
+  "roleAssignments": [
+    {
+      "principalId": "11111111-1111-1111-1111-111111111111",
+      "principalType": "ServicePrincipal",
+      "principalName": "ci-deployer-sp",
+      "roleDefinitionName": "Owner",
+      "roleDefinitionId": "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/8e3af657-a8ff-443c-a75c-2fe8c4bcb635",
+      "scope": "/subscriptions/00000000-0000-0000-0000-000000000000"
+    },
+    {
+      "principalId": "22222222-2222-2222-2222-222222222222",
+      "principalType": "User",
+      "principalName": "auditor@contoso.com",
+      "roleDefinitionName": "Reader",
+      "roleDefinitionId": "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7",
+      "scope": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/prod-rg"
+    },
+    {
+      "principalId": "33333333-3333-3333-3333-333333333333",
+      "principalType": "ManagedIdentity",
+      "principalName": "acme-app-mi",
+      "roleDefinitionName": "Contributor",
+      "roleDefinitionId": "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c",
+      "scope": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/prod-rg/providers/Microsoft.Storage/storageAccounts/acmeprod"
+    }
+  ],
+  "roleDefinitions": [
+    {
+      "roleName": "Owner",
+      "name": "8e3af657-a8ff-443c-a75c-2fe8c4bcb635",
+      "roleType": "BuiltInRole",
+      "permissions": [
+        {"actions": ["*"], "notActions": [], "dataActions": [], "notDataActions": []}
+      ]
+    },
+    {
+      "roleName": "Reader",
+      "name": "acdd72a7-3385-48ef-bd42-f606fba81ae7",
+      "roleType": "BuiltInRole",
+      "permissions": [
+        {"actions": ["*/read"], "notActions": [], "dataActions": [], "notDataActions": []}
+      ]
+    },
+    {
+      "roleName": "Contributor",
+      "name": "b24988ac-6180-42a0-ab88-20f7382dd24c",
+      "roleType": "BuiltInRole",
+      "permissions": [
+        {
+          "actions": ["*"],
+          "notActions": [
+            "Microsoft.Authorization/*/Write",
+            "Microsoft.Authorization/*/Delete",
+            "Microsoft.Authorization/elevateAccess/Action"
+          ],
+          "dataActions": [],
+          "notDataActions": []
+        }
+      ]
+    }
+  ]
+}

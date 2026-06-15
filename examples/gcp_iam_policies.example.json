@@ -1,0 +1,43 @@
+[
+  {
+    "_comment": "Tiny sample of `gcloud asset search-all-iam-policies --format=json` output. Run that read-only command yourself and feed the real file to `agenthound gcp-iam --import <file>`. AgentHound never calls GCP. Escalation story: user:dev can impersonate the ci-deployer service account (serviceAccountTokenCreator), and ci-deployer is roles/owner on the project — so a non-admin user reaches owner via impersonation. Admin comes from the roles/owner binding, never from a name.",
+    "resource": "//cloudresourcemanager.googleapis.com/projects/acme-prod",
+    "project": "projects/acme-prod",
+    "policy": {
+      "bindings": [
+        {
+          "role": "roles/owner",
+          "members": ["serviceAccount:ci-deployer@acme-prod.iam.gserviceaccount.com"]
+        },
+        {
+          "role": "roles/viewer",
+          "members": ["user:auditor@example.com"]
+        }
+      ]
+    }
+  },
+  {
+    "resource": "//storage.googleapis.com/projects/_/buckets/acme-prod-data",
+    "project": "projects/acme-prod",
+    "policy": {
+      "bindings": [
+        {
+          "role": "roles/storage.objectViewer",
+          "members": ["user:auditor@example.com"]
+        }
+      ]
+    }
+  },
+  {
+    "resource": "//iam.googleapis.com/projects/acme-prod/serviceAccounts/ci-deployer@acme-prod.iam.gserviceaccount.com",
+    "project": "projects/acme-prod",
+    "policy": {
+      "bindings": [
+        {
+          "role": "roles/iam.serviceAccountTokenCreator",
+          "members": ["user:dev@example.com"]
+        }
+      ]
+    }
+  }
+]

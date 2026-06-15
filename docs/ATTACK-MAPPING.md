@@ -18,11 +18,12 @@ it never executes any of them. The mapping below is "what an operator looking
 at this graph is reasoning about," not "what the tool does."
 
 > Scope note: the table reflects edges the current collectors actually emit
-> (`local`, `mcp`, `aws-iam`). `GRANTS_ACCESS` is emitted from a `mcp` inventory's
-> declared resources and, as of Phase 2, from **real AWS policies** via the
-> `aws-iam` collector (an uploaded IAM export — no live API). `CAN_ASSUME` comes
-> from `local` (`~/.aws/config` assume-role wiring) and from role trust policies
-> in `aws-iam`.
+> (`local`, `mcp`, `aws-iam`, `gcp-iam`, `azure-rbac`). `GRANTS_ACCESS` is emitted
+> from a `mcp` inventory's declared resources and, as of Phase 2, from **real
+> cloud policies** via the cloud collectors (uploaded IAM/RBAC exports — no live
+> API). `CAN_ASSUME` comes from `local` (`~/.aws/config` assume-role wiring), from
+> role trust policies in `aws-iam`, and from GCP service-account impersonation
+> bindings in `gcp-iam`.
 
 ---
 
@@ -65,6 +66,26 @@ the cloud/SaaS resources those NHIs reach. No live network connection.
 |---|---|---|
 | NHI → cloud/SaaS resource (`GRANTS_ACCESS`) | **T1078.004** Valid Accounts: Cloud Accounts | **AML.T0012** Valid Accounts |
 | MCP server authenticates as NHI (`AUTHENTICATES_AS`) | **T1078** Valid Accounts | **AML.T0012** Valid Accounts |
+
+### `aws-iam` / `gcp-iam` / `azure-rbac` — real cloud permissions (upload-only)
+
+`agenthound/collectors/{aws_iam,gcp_iam,azure_rbac}.py` resolve *real* cloud
+permissions from a read-only export the operator generates and uploads — **no
+live API call**. They resolve which identities hold which access, flagging
+admin from policy *evidence* (an `Allow *:*` / `AdministratorAccess`,
+`roles/owner`, or an Azure `*`-with-no-`notActions` Owner role) rather than a
+principal's name, and they draw the cross-identity escalation edges.
+
+| What it resolves | Source export | ATT&CK | ATLAS |
+|---|---|---|---|
+| Identity → resource grant (`GRANTS_ACCESS`) | IAM/RBAC export | **T1078.004** Valid Accounts: Cloud | **AML.T0012** Valid Accounts |
+| AWS assume-role / GCP SA impersonation (`CAN_ASSUME`) | role trust policy / impersonation binding | **T1548** Abuse Elevation Control Mechanism | **AML.T0012** Valid Accounts |
+| Admin / full-access identity (`grants_full_access`) | policy content | **T1078.004** Valid Accounts: Cloud | **AML.T0012** Valid Accounts |
+
+GCP service-account impersonation (`serviceAccountTokenCreator` /
+`serviceAccountUser` / `workloadIdentityUser`) is the GCP analogue of AWS
+assume-role: a member that can act as a more-privileged service account — a
+`T1548` elevation the `CanAssume` graph makes walkable.
 
 ---
 

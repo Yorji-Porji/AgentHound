@@ -111,14 +111,36 @@ queries:
       ORDER BY hops DESC
       LIMIT 25
 
-  - id: injection_to_full_access_identity
-    title: Injection paths reaching an admin / full-access AWS identity
+  - id: gcp_service_account_impersonation_escalation
+    title: GCP privilege escalation via service-account impersonation
     description: >
-      The aws-iam collector flags identities whose policies grant unrestricted
-      access (grants_full_access). This finds untrusted-content sources that can
-      coerce an agent into a tool backed by such an identity — independent of
-      resource tier (aws-iam resources are tier-unknown until tagged, so this
-      complements the production-tier blast-radius query).
+      Walks the CanAssume graph the gcp-iam collector draws from impersonation
+      bindings (serviceAccountTokenCreator / serviceAccountUser /
+      workloadIdentityUser on a service account). Each hop is one identity that
+      can mint tokens for — i.e. act as — a service account; chained together
+      they reveal a member that can reach a far more powerful service account
+      than it holds directly. The headline finding is a chain that lands on an
+      SA flagged grants_full_access (roles/owner).
+    risk_category: critical
+    cypher: |
+      MATCH path = (start:Nhi)-[:CanAssume*1..5]->(sa:Nhi)
+      WHERE start.provider = 'gcp' AND sa.grants_full_access = true
+      RETURN start.name  AS from_identity,
+             sa.name     AS reachable_sa,
+             length(path) AS hops
+      ORDER BY hops DESC
+      LIMIT 25
+
+  - id: injection_to_full_access_identity
+    title: Injection paths reaching an admin / full-access cloud identity
+    description: >
+      The aws-iam, gcp-iam, and azure-rbac collectors all flag identities whose
+      policies grant unrestricted access (grants_full_access — an AWS Allow *:*
+      / AdministratorAccess, GCP roles/owner, or Azure Owner). This finds
+      untrusted-content sources that can coerce an agent into a tool backed by
+      such an identity — independent of resource tier (cloud-export resources are
+      tier-unknown until tagged, so this complements the production-tier
+      blast-radius query).
     risk_category: critical
     cypher: |
       MATCH path = (i:InjectableInput)-[:Coerces]->(a:Agent)

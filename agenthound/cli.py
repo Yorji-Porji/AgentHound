@@ -40,7 +40,9 @@ from pydantic import ValidationError
 from agenthound import __version__
 from agenthound.audit import AuditError, AuditLog, verify_audit_log
 from agenthound.collectors.aws_iam import AWSIAMCollector, AWSIAMExportError
+from agenthound.collectors.azure_rbac import AzureRBACCollector, AzureRBACExportError
 from agenthound.collectors.base import CollectionResult
+from agenthound.collectors.gcp_iam import GCPIAMCollector, GCPIAMExportError
 from agenthound.collectors.local import LocalCollector
 from agenthound.collectors.mcp import MCPCollector
 from agenthound.inference import CoercionInferencer
@@ -367,6 +369,77 @@ def cmd_aws_iam(
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, AWSIAMExportError) as exc:
         raise click.ClickException(
             f"Could not read AWS IAM export {import_path}: {exc}"
+        ) from exc
+    _write_result(result, output, strip_branding=no_branding)
+
+
+@main.command("gcp-iam")
+@click.option(
+    "--import", "-i", "import_path",
+    type=click.Path(path_type=Path, exists=True), required=True,
+    help="A `gcloud asset search-all-iam-policies` JSON export to resolve.",
+)
+@click.option("--output", "-o", type=click.Path(path_type=Path), default=None)
+@click.option("--no-branding", is_flag=True, help="Strip AgentHound branding for clean merges.")
+@click.option(
+    "--scope",
+    type=click.Path(path_type=Path, exists=True),
+    default=None,
+    help="Engagement scope YAML. Enforces provider/path/time limits and audit logging.",
+)
+def cmd_gcp_iam(
+    import_path: Path, output: Path | None, no_branding: bool, scope: Path | None
+) -> None:
+    """Resolve real GCP permissions from an uploaded IAM-policy export (network-free).
+
+    Run `gcloud asset search-all-iam-policies --scope=organizations/ORG_ID
+    --format=json > gcp_iam.json` yourself, then feed the file here — AgentHound
+    never calls GCP. Emits the identities, the resources their bindings grant,
+    evidence-based admin flags (roles/owner), and CAN_ASSUME edges for
+    service-account impersonation.
+    """
+    guard, audit = _activate_scope(scope)
+    try:
+        collector = GCPIAMCollector(import_path, guard=guard, audit=audit)
+        result = collector.collect()
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, GCPIAMExportError) as exc:
+        raise click.ClickException(
+            f"Could not read GCP IAM export {import_path}: {exc}"
+        ) from exc
+    _write_result(result, output, strip_branding=no_branding)
+
+
+@main.command("azure-rbac")
+@click.option(
+    "--import", "-i", "import_path",
+    type=click.Path(path_type=Path, exists=True), required=True,
+    help="An Azure RBAC export ({roleAssignments, roleDefinitions} or an assignment list).",
+)
+@click.option("--output", "-o", type=click.Path(path_type=Path), default=None)
+@click.option("--no-branding", is_flag=True, help="Strip AgentHound branding for clean merges.")
+@click.option(
+    "--scope",
+    type=click.Path(path_type=Path, exists=True),
+    default=None,
+    help="Engagement scope YAML. Enforces provider/path/time limits and audit logging.",
+)
+def cmd_azure_rbac(
+    import_path: Path, output: Path | None, no_branding: bool, scope: Path | None
+) -> None:
+    """Resolve real Azure permissions from an uploaded RBAC export (network-free).
+
+    Combine `az role assignment list --all -o json` (and, recommended, `az role
+    definition list -o json`) into one file, then feed it here — AgentHound never
+    calls Azure. Emits the principals, the scopes their assignments grant, and
+    evidence-based admin flags (action `*` with no notActions = Owner).
+    """
+    guard, audit = _activate_scope(scope)
+    try:
+        collector = AzureRBACCollector(import_path, guard=guard, audit=audit)
+        result = collector.collect()
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, AzureRBACExportError) as exc:
+        raise click.ClickException(
+            f"Could not read Azure RBAC export {import_path}: {exc}"
         ) from exc
     _write_result(result, output, strip_branding=no_branding)
 
