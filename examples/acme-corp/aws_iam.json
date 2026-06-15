@@ -1,0 +1,178 @@
+{
+  "_comment": "FAKE but production-SHAPED `aws iam get-account-authorization-details` for Acme Robotics' prod account (481516234299). Identity/permission METADATA only — no credential values (that is AgentHound invariant #1). Feed to `agenthound aws-iam -i examples/acme-corp/aws_iam.json`. Planted findings: terraform-ci is admin via an inline Allow *:* (the over-privileged-CI classic); OrganizationAdmin carries AdministratorAccess and is assumable from the security account's break-glass; legacy-jenkins holds iam:* + s3:* (scary) but is NOT flagged full-access because it is not Action:* on Resource:* (evidence, not vibes); vendor-datadog is a third-party cross-account role. See README.md for the fake->real replace table.",
+  "UserDetailList": [
+    {
+      "UserName": "legacy-jenkins",
+      "UserId": "AIDA000000000LEGACY",
+      "Arn": "arn:aws:iam::481516234299:user/legacy-jenkins",
+      "AttachedManagedPolicies": [],
+      "UserPolicyList": [
+        {
+          "PolicyName": "jenkins-broad-but-not-star",
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              { "Effect": "Allow", "Action": "iam:*", "Resource": "*" },
+              { "Effect": "Allow", "Action": "s3:*", "Resource": "*" }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "GroupDetailList": [],
+  "RoleDetailList": [
+    {
+      "RoleName": "OrganizationAdmin",
+      "RoleId": "AROA00000000ORGADMIN",
+      "Arn": "arn:aws:iam::481516234299:role/OrganizationAdmin",
+      "AssumeRolePolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": { "AWS": "arn:aws:iam::235711131719:role/BreakGlass" },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      },
+      "AttachedManagedPolicies": [
+        { "PolicyName": "AdministratorAccess", "PolicyArn": "arn:aws:iam::aws:policy/AdministratorAccess" }
+      ],
+      "RolePolicyList": []
+    },
+    {
+      "RoleName": "terraform-ci",
+      "RoleId": "AROA0000000TERRAFORM",
+      "Arn": "arn:aws:iam::481516234299:role/terraform-ci",
+      "AssumeRolePolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": { "AWS": "arn:aws:iam::314159265358:role/github-actions-oidc" },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      },
+      "AttachedManagedPolicies": [],
+      "RolePolicyList": [
+        {
+          "PolicyName": "terraform-everything",
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              { "Effect": "Allow", "Action": "*", "Resource": "*" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "RoleName": "app-payments",
+      "RoleId": "AROA0000000APPPAYMTS",
+      "Arn": "arn:aws:iam::481516234299:role/app-payments",
+      "AssumeRolePolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": { "Service": "ecs-tasks.amazonaws.com" },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      },
+      "AttachedManagedPolicies": [],
+      "RolePolicyList": [
+        {
+          "PolicyName": "payments-runtime",
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": ["s3:GetObject", "s3:PutObject"],
+                "Resource": "arn:aws:s3:::acme-payments-prod/*"
+              },
+              {
+                "Effect": "Allow",
+                "Action": ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"],
+                "Resource": "arn:aws:dynamodb:us-east-1:481516234299:table/Orders"
+              },
+              {
+                "Effect": "Allow",
+                "Action": "secretsmanager:GetSecretValue",
+                "Resource": "arn:aws:secretsmanager:us-east-1:481516234299:secret:prod/payments/stripe-*"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "RoleName": "ReadOnlySecurityAudit",
+      "RoleId": "AROA0000000SECAUDIT0",
+      "Arn": "arn:aws:iam::481516234299:role/ReadOnlySecurityAudit",
+      "AssumeRolePolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": { "AWS": "arn:aws:iam::235711131719:root" },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      },
+      "AttachedManagedPolicies": [
+        { "PolicyName": "SecurityAudit", "PolicyArn": "arn:aws:iam::aws:policy/SecurityAudit" }
+      ],
+      "RolePolicyList": [
+        {
+          "PolicyName": "read-prod-inventory",
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": ["s3:GetObject", "s3:ListBucket"],
+                "Resource": "arn:aws:s3:::acme-data-lake-prod/*"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "RoleName": "vendor-datadog",
+      "RoleId": "AROA0000000VENDORDDG",
+      "Arn": "arn:aws:iam::481516234299:role/vendor-datadog",
+      "AssumeRolePolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": { "AWS": "arn:aws:iam::999988887777:root" },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      },
+      "AttachedManagedPolicies": [],
+      "RolePolicyList": [
+        {
+          "PolicyName": "datadog-monitoring-read",
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": ["cloudwatch:Get*", "cloudwatch:List*", "logs:Get*", "logs:Describe*"],
+                "Resource": "*"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "Policies": []
+}
