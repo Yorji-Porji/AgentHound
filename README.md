@@ -5,7 +5,6 @@ Graph-based attack path mapping for AI agents, MCP servers, and the non-human id
 AgentHound is a [BloodHound OpenGraph](https://specterops.io/opengraph/) collector for AI agent ecosystems. It models AI assistants (Cursor, Claude Code, Claude Desktop, VS Code, Zed) alongside the MCP servers they consume, the non-human identities (NHIs) those servers authenticate as, and the cloud and SaaS resources reachable through the resulting chain.
 
 Where traditional identity graphs treat edges as *permissions an identity holds*, AgentHound adds a second edge class: **coercion edges** — the relationship "this identity can be made to do X by untrusted input reaching its context window." Prompt injection becomes a first-class graph primitive, and reachability queries can answer the previously unanswerable question: *"if untrusted content reaches this developer's AI assistant, what's the production blast radius in N tool-call hops?"*
-
 ## Why
 
 Non-human identities are now the dominant cloud breach vector and agentic AI is accelerating NHI proliferation past what existing IAM tooling can govern. Developer-side AI assistants routinely hold the union of every credential a developer has — GitHub PATs, AWS profiles, kube configs, npm tokens, MCP server OAuth tokens — and most organizations have no visibility into the resulting blast radius.

@@ -42,7 +42,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from agenthound.collectors.base import CollectionResult, Collector
+from agenthound.collectors.base import CollectionResult, Collector, as_list
 
 if TYPE_CHECKING:
     from agenthound.audit import AuditLog
@@ -72,13 +72,6 @@ class AzureRBACExportError(ValueError):
     """The uploaded file is not a usable Azure RBAC export."""
 
 
-def _as_list(value: Any) -> list[Any]:
-    """A field that is a scalar or a list; normalize to a list."""
-    if value is None:
-        return []
-    return value if isinstance(value, list) else [value]
-
-
 def _get(record: dict[str, Any], key: str) -> Any:
     """Read a field from the top level or the ARM-REST ``properties`` sub-object.
 
@@ -106,11 +99,11 @@ def _role_def_full_access(definition: dict[str, Any]) -> bool:
     carries ``notActions`` removing the access-management verbs, so it is not
     flagged — the Azure parallel to the AWS ``Allow *`` on ``*`` test.
     """
-    for perm in _as_list(definition.get("permissions")):
+    for perm in as_list(definition.get("permissions")):
         if not isinstance(perm, dict):
             continue
-        actions = [a for a in _as_list(perm.get("actions")) if isinstance(a, str)]
-        not_actions = [a for a in _as_list(perm.get("notActions")) if isinstance(a, str)]
+        actions = [a for a in as_list(perm.get("actions")) if isinstance(a, str)]
+        not_actions = [a for a in as_list(perm.get("notActions")) if isinstance(a, str)]
         if "*" in actions and not not_actions:
             return True
     return False
@@ -243,7 +236,7 @@ def _split_export(data: list[Any] | dict[str, Any]) -> tuple[list[Any], list[Any
     assignments = data.get("roleAssignments")
     definitions = data.get("roleDefinitions")
     if isinstance(assignments, list) or isinstance(definitions, list):
-        return _as_list(assignments), _as_list(definitions)
+        return as_list(assignments), as_list(definitions)
     value = data.get("value")  # ARM REST list wrapper
     if isinstance(value, list):
         return value, []

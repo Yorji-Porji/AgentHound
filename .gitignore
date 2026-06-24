@@ -61,6 +61,8 @@ bloodhound.json
 local.json
 mcp.json
 graph.json
+# Ad-hoc per-collector outputs (e.g. aws_out.json, gcp_out.json, azure_out.json).
+*_out.json
 audit.jsonl
 engagement-audit.jsonl
 # Local engagement scope files — host-specific, not part of the project.

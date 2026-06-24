@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from agenthound.schema.edges import Edge
 from agenthound.schema.nodes import Node
@@ -13,6 +13,17 @@ from agenthound.schema.nodes import Node
 if TYPE_CHECKING:
     from agenthound.audit import AuditLog
     from agenthound.scope import ScopeGuard
+
+
+def as_list(value: Any) -> list[Any]:
+    """Normalize a cloud-export field that may be a scalar or a list to a list.
+
+    IAM/RBAC exports represent single-element fields as either a bare value or a
+    one-element list; the AWS, GCP, and Azure collectors all need this.
+    """
+    if value is None:
+        return []
+    return value if isinstance(value, list) else [value]
 
 
 @dataclass

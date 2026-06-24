@@ -47,7 +47,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from agenthound.collectors.base import CollectionResult, Collector
+from agenthound.collectors.base import CollectionResult, Collector, as_list
 
 if TYPE_CHECKING:
     from agenthound.audit import AuditLog
@@ -94,13 +94,6 @@ _RESOURCE_KIND_BY_PATH = {
 
 class GCPIAMExportError(ValueError):
     """The uploaded file is not a usable GCP IAM-policy export."""
-
-
-def _as_list(value: Any) -> list[Any]:
-    """A field that is a scalar or a list; normalize to a list."""
-    if value is None:
-        return []
-    return value if isinstance(value, list) else [value]
 
 
 def _parse_member(member: str) -> tuple[str, str] | None:
@@ -303,13 +296,13 @@ def _iter_bindings(
             policy = res if "bindings" in res else None
         if not isinstance(policy, dict):
             continue
-        for binding in _as_list(policy.get("bindings")):
+        for binding in as_list(policy.get("bindings")):
             if not isinstance(binding, dict):
                 continue
             role = binding.get("role")
             if not isinstance(role, str) or not role:
                 continue
-            member_list = [m for m in _as_list(binding.get("members")) if isinstance(m, str)]
+            member_list = [m for m in as_list(binding.get("members")) if isinstance(m, str)]
             yield resource, role, member_list
 
 

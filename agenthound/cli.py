@@ -216,6 +216,32 @@ def _activate_scope(
     return guard, audit
 
 
+def _emit_import_collector(
+    collector_cls: type,
+    error_cls: type[Exception],
+    label: str,
+    import_path: Path,
+    output: Path | None,
+    no_branding: bool,
+    scope: Path | None,
+) -> None:
+    """Shared body for the upload-only cloud-export subcommands.
+
+    Activates scope, runs the collector, and turns the expected read/parse errors
+    into a clean ClickException. Identical across aws-iam / gcp-iam / azure-rbac,
+    differing only in the collector class, its export-error type, and the human
+    ``label`` in the failure message.
+    """
+    guard, audit = _activate_scope(scope)
+    try:
+        result = collector_cls(import_path, guard=guard, audit=audit).collect()
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, error_cls) as exc:
+        raise click.ClickException(
+            f"Could not read {label} export {import_path}: {exc}"
+        ) from exc
+    _write_result(result, output, strip_branding=no_branding)
+
+
 # --- Click command group ------------------------------------------------------
 
 @click.group()
@@ -362,15 +388,10 @@ def cmd_aws_iam(
     resources their policies grant, evidence-based admin flags, and CAN_ASSUME
     edges from role trust policies.
     """
-    guard, audit = _activate_scope(scope)
-    try:
-        collector = AWSIAMCollector(import_path, guard=guard, audit=audit)
-        result = collector.collect()
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, AWSIAMExportError) as exc:
-        raise click.ClickException(
-            f"Could not read AWS IAM export {import_path}: {exc}"
-        ) from exc
-    _write_result(result, output, strip_branding=no_branding)
+    _emit_import_collector(
+        AWSIAMCollector, AWSIAMExportError, "AWS IAM",
+        import_path, output, no_branding, scope,
+    )
 
 
 @main.command("gcp-iam")
@@ -398,15 +419,10 @@ def cmd_gcp_iam(
     evidence-based admin flags (roles/owner), and CAN_ASSUME edges for
     service-account impersonation.
     """
-    guard, audit = _activate_scope(scope)
-    try:
-        collector = GCPIAMCollector(import_path, guard=guard, audit=audit)
-        result = collector.collect()
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, GCPIAMExportError) as exc:
-        raise click.ClickException(
-            f"Could not read GCP IAM export {import_path}: {exc}"
-        ) from exc
-    _write_result(result, output, strip_branding=no_branding)
+    _emit_import_collector(
+        GCPIAMCollector, GCPIAMExportError, "GCP IAM",
+        import_path, output, no_branding, scope,
+    )
 
 
 @main.command("azure-rbac")
@@ -433,15 +449,10 @@ def cmd_azure_rbac(
     calls Azure. Emits the principals, the scopes their assignments grant, and
     evidence-based admin flags (action `*` with no notActions = Owner).
     """
-    guard, audit = _activate_scope(scope)
-    try:
-        collector = AzureRBACCollector(import_path, guard=guard, audit=audit)
-        result = collector.collect()
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, AzureRBACExportError) as exc:
-        raise click.ClickException(
-            f"Could not read Azure RBAC export {import_path}: {exc}"
-        ) from exc
-    _write_result(result, output, strip_branding=no_branding)
+    _emit_import_collector(
+        AzureRBACCollector, AzureRBACExportError, "Azure RBAC",
+        import_path, output, no_branding, scope,
+    )
 
 
 @main.command("infer")
