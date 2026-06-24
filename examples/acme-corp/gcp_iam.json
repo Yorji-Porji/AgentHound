@@ -1,0 +1,73 @@
+[
+  {
+    "_comment": "FAKE but production-SHAPED `gcloud asset search-all-iam-policies --format=json` for Acme Robotics' GCP org (acmerobotics.io). Identity/permission METADATA only — no credential values. Feed to `agenthound gcp-iam -i examples/acme-corp/gcp_iam.json`. Planted findings: terraform-deployer SA is roles/owner on acme-prod (over-privileged CI); the dev-platform group AND the GitHub Actions workload-identity principal can both impersonate terraform-deployer (serviceAccountTokenCreator / workloadIdentityUser) — a CanAssume escalation that lands on an owner SA. See README.md for the fake->real replace table.",
+    "resource": "//cloudresourcemanager.googleapis.com/projects/acme-prod",
+    "project": "projects/acme-prod",
+    "policy": {
+      "bindings": [
+        {
+          "role": "roles/owner",
+          "members": [
+            "group:org-admins@acmerobotics.io",
+            "serviceAccount:terraform-deployer@acme-prod.iam.gserviceaccount.com"
+          ]
+        },
+        { "role": "roles/viewer", "members": ["user:auditor@acmerobotics.io"] }
+      ]
+    }
+  },
+  {
+    "resource": "//storage.googleapis.com/projects/_/buckets/acme-prod-artifacts",
+    "project": "projects/acme-prod",
+    "policy": {
+      "bindings": [
+        {
+          "role": "roles/storage.objectViewer",
+          "members": ["serviceAccount:payments-api@acme-prod.iam.gserviceaccount.com"]
+        }
+      ]
+    }
+  },
+  {
+    "resource": "//sqladmin.googleapis.com/projects/acme-prod/instances/payments-db-prod",
+    "project": "projects/acme-prod",
+    "policy": {
+      "bindings": [
+        {
+          "role": "roles/cloudsql.client",
+          "members": ["serviceAccount:payments-api@acme-prod.iam.gserviceaccount.com"]
+        }
+      ]
+    }
+  },
+  {
+    "resource": "//iam.googleapis.com/projects/acme-prod/serviceAccounts/terraform-deployer@acme-prod.iam.gserviceaccount.com",
+    "project": "projects/acme-prod",
+    "policy": {
+      "bindings": [
+        {
+          "role": "roles/iam.serviceAccountTokenCreator",
+          "members": ["group:dev-platform@acmerobotics.io"]
+        },
+        {
+          "role": "roles/iam.workloadIdentityUser",
+          "members": [
+            "principalSet://iam.googleapis.com/projects/729000000001/locations/global/workloadIdentityPools/github-pool/attribute.repository/acmerobotics/infra"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "resource": "//cloudresourcemanager.googleapis.com/projects/acme-staging",
+    "project": "projects/acme-staging",
+    "policy": {
+      "bindings": [
+        {
+          "role": "roles/editor",
+          "members": ["serviceAccount:terraform-deployer@acme-prod.iam.gserviceaccount.com"]
+        }
+      ]
+    }
+  }
+]

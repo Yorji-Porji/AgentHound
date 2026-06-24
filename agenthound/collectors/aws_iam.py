@@ -34,7 +34,7 @@ import urllib.parse
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from agenthound.collectors.base import CollectionResult, Collector
+from agenthound.collectors.base import CollectionResult, Collector, as_list
 
 if TYPE_CHECKING:
     from agenthound.audit import AuditLog
@@ -50,13 +50,6 @@ ADMIN_POLICY_ARN = "arn:aws:iam::aws:policy/AdministratorAccess"
 
 class AWSIAMExportError(ValueError):
     """The uploaded file is not a usable IAM authorization-details export."""
-
-
-def _as_list(value: Any) -> list[Any]:
-    """IAM fields are a scalar or a list; normalize to a list."""
-    if value is None:
-        return []
-    return value if isinstance(value, list) else [value]
 
 
 def _as_document(value: Any) -> dict[str, Any] | None:
@@ -76,7 +69,7 @@ def _statements(document: Any) -> list[dict[str, Any]]:
     doc = _as_document(document)
     if not doc:
         return []
-    return [s for s in _as_list(doc.get("Statement")) if isinstance(s, dict)]
+    return [s for s in as_list(doc.get("Statement")) if isinstance(s, dict)]
 
 
 def _arn_account(arn: str) -> str | None:
@@ -93,8 +86,8 @@ def _is_full_access(statement: dict[str, Any]) -> bool:
     """An Allow of action ``*`` on resource ``*`` — the real definition of admin."""
     if statement.get("Effect") != "Allow":
         return False
-    actions = set(_as_list(statement.get("Action")))
-    resources = set(_as_list(statement.get("Resource")))
+    actions = set(as_list(statement.get("Action")))
+    resources = set(as_list(statement.get("Resource")))
     return "*" in actions and "*" in resources
 
 
@@ -126,9 +119,9 @@ class AWSIAMCollector(Collector):
         if not self.allow_provider("aws", f"aws-iam:{self.import_path}"):
             return result
 
-        managed = _index_managed_policies(_as_list(data.get("Policies")))
-        roles = [r for r in _as_list(data.get("RoleDetailList")) if isinstance(r, dict)]
-        users = [u for u in _as_list(data.get("UserDetailList")) if isinstance(u, dict)]
+        managed = _index_managed_policies(as_list(data.get("Policies")))
+        roles = [r for r in as_list(data.get("RoleDetailList")) if isinstance(r, dict)]
+        users = [u for u in as_list(data.get("UserDetailList")) if isinstance(u, dict)]
 
         # Phase 1: trust placeholders + CAN_ASSUME edges first. A role's objectid
         # is deterministic from its ARN, so trust edges can be wired before the
@@ -173,12 +166,12 @@ class AWSIAMCollector(Collector):
         # Inline policy documents (role or user) plus resolved managed docs.
         documents: list[Any] = [
             inline.get("PolicyDocument")
-            for inline in _as_list(principal.get("RolePolicyList"))
-            + _as_list(principal.get("UserPolicyList"))
+            for inline in as_list(principal.get("RolePolicyList"))
+            + as_list(principal.get("UserPolicyList"))
             if isinstance(inline, dict)
         ]
         full_access = False
-        for att in _as_list(principal.get("AttachedManagedPolicies")):
+        for att in as_list(principal.get("AttachedManagedPolicies")):
             if not isinstance(att, dict):
                 continue
             policy_arn = att.get("PolicyArn")
@@ -194,7 +187,7 @@ class AWSIAMCollector(Collector):
                     full_access = True
                 if stmt.get("Effect") == "Allow":
                     resources_allowed.update(
-                        r for r in _as_list(stmt.get("Resource")) if isinstance(r, str)
+                        r for r in as_list(stmt.get("Resource")) if isinstance(r, str)
                     )
 
         # An admin reaches everything; guarantee a reachability edge even when the
@@ -233,7 +226,7 @@ class AWSIAMCollector(Collector):
             principal = stmt.get("Principal")
             if not isinstance(principal, dict):
                 continue
-            for assumer_arn in _as_list(principal.get("AWS")):
+            for assumer_arn in as_list(principal.get("AWS")):
                 if not isinstance(assumer_arn, str):
                     continue
                 assumer = nhi_node(
@@ -260,7 +253,7 @@ def _index_managed_policies(policies: list[Any]) -> dict[str, Any]:
         if not isinstance(arn, str) or not arn:
             continue
         default_version = pol.get("DefaultVersionId")
-        for ver in _as_list(pol.get("PolicyVersionList")):
+        for ver in as_list(pol.get("PolicyVersionList")):
             if not isinstance(ver, dict):
                 continue
             if ver.get("VersionId") == default_version or ver.get("IsDefaultVersion"):
