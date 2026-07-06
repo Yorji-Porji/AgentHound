@@ -4,27 +4,27 @@ Notable changes to AgentHound. The format is loosely based on
 [Keep a Changelog](https://keepachangelog.com/). AgentHound is in **alpha** —
 the graph schema and CLI surface may change between releases.
 
-## [Unreleased]
+## [0.2.2] - 2026-07-05
 
 ### Added
 
-- **`agenthound gcp-iam`** — resolves *real* GCP permissions from an uploaded
+- **`agenthound gcp-iam`**: resolves *real* GCP permissions from an uploaded
   `gcloud asset search-all-iam-policies` export, the GCP analogue of `aws-iam`.
   Emits each binding member as an NHI, the resources their bindings grant
-  (`GRANTS_ACCESS`), an **evidence-based** admin flag (`roles/owner` — GCP's own
+  (`GRANTS_ACCESS`), an **evidence-based** admin flag (`roles/owner`, GCP's own
   basic role, never a custom-role name), and **`CAN_ASSUME`** edges for
   service-account impersonation (`serviceAccountTokenCreator` / `serviceAccountUser`
-  / `workloadIdentityUser` on a service account). Upload-only — **the tool never
+  / `workloadIdentityUser` on a service account). Upload-only; **the tool never
   calls GCP**. Service accounts are keyed on their email, so impersonation
   targets join their grantee node. Ships with a
   `gcp_service_account_impersonation_escalation` Cypher query.
-- **`agenthound azure-rbac`** — resolves *real* Azure permissions from an
+- **`agenthound azure-rbac`**: resolves *real* Azure permissions from an
   uploaded RBAC export (`az role assignment list` plus, recommended, `az role
   definition list`), the Azure analogue of `aws-iam`. Emits each principal as an
   NHI, the scopes their assignments grant (`GRANTS_ACCESS`), and an
-  **evidence-based** admin flag (action `*` with no `notActions` — the built-in
+  **evidence-based** admin flag (action `*` with no `notActions`, the built-in
   Owner role, never a role name; falls back to the fixed `Owner` name when role
-  definitions are absent). Upload-only — **the tool never calls Azure**.
+  definitions are absent). Upload-only; **the tool never calls Azure**.
 
 ## [0.2.1] — 2026-06-13
 
@@ -96,5 +96,6 @@ prompt-injection reachability.
 - Malformed collection files and partial overlay records fail soft (a clear
   error or a skipped record) instead of crashing the CLI.
 
+[0.2.2]: https://github.com/Yorji-Porji/AgentHound/releases/tag/v0.2.2
 [0.2.1]: https://github.com/Yorji-Porji/AgentHound/releases/tag/v0.2.1
 [0.2.0]: https://github.com/Yorji-Porji/AgentHound/releases/tag/v0.2.0

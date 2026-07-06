@@ -1,27 +1,94 @@
-# AgentHound
+<div align="center">
 
-Graph-based attack path mapping for AI agents, MCP servers, and the non-human identities they reach.
+<img src="assets/agenthound-banner.png" alt="AgentHound" width="720">
+
+**Graph-based attack path mapping for AI agents, MCP servers, and the non-human identities they reach.**
+
+[![CI](https://github.com/Yorji-Porji/AgentHound/actions/workflows/ci.yml/badge.svg)](https://github.com/Yorji-Porji/AgentHound/actions/workflows/ci.yml) [![Python](https://img.shields.io/badge/python-3.11--3.14-blue.svg)](https://www.python.org/) [![License](https://img.shields.io/badge/license-Apache_2.0-green.svg)](LICENSE) ![Status](https://img.shields.io/badge/status-alpha-orange.svg)
+
+</div>
+
+<details>
+<summary>ASCII banner (text version)</summary>
+
+<pre>
+ ▄▄▄        ▄████ ▓█████  ███▄    █ ▄▄▄█████▓ ██░ ██  ▒█████   █    ██  ███▄    █ ▓█████▄ 
+▒████▄     ██▒ ▀█▒▓█   ▀  ██ ▀█   █ ▓  ██▒ ▓▒▓██░ ██▒▒██▒  ██▒ ██  ▓██▒ ██ ▀█   █ ▒██▀ ██▌
+▒██  ▀█▄  ▒██░▄▄▄░▒███   ▓██  ▀█ ██▒▒ ▓██░ ▒░▒██▀▀██░▒██░  ██▒▓██  ▒██░▓██  ▀█ ██▒░██   █▌
+░██▄▄▄▄██ ░▓█  ██▓▒▓█  ▄ ▓██▒  ▐▌██▒░ ▓██▓ ░ ░▓█ ░██ ▒██   ██░▓▓█  ░██░▓██▒  ▐▌██▒░▓█▄   ▌
+ ▓█   ▓██▒░▒▓███▀▒░▒████▒▒██░   ▓██░  ▒██▒ ░ ░▓█▒░██▓░ ████▓▒░▒▒█████▓ ▒██░   ▓██░░▒████▓ 
+ ▒▒   ▓▒█░ ░▒   ▒ ░░ ▒░ ░░ ▒░   ▒ ▒   ▒ ░░    ▒ ░░▒░▒░ ▒░▒░▒░ ░▒▓▒ ▒ ▒ ░ ▒░   ▒ ▒  ▒▒▓  ▒ 
+  ▒   ▒▒ ░  ░   ░  ░ ░  ░░ ░░   ░ ▒░    ░     ▒ ░▒░ ░  ░ ▒ ▒░ ░░▒░ ░ ░ ░ ░░   ░ ▒░ ░ ▒  ▒ 
+  ░   ▒   ░ ░   ░    ░      ░   ░ ░   ░       ░  ░░ ░░ ░ ░ ▒   ░░░ ░ ░    ░   ░ ░  ░ ░  ░ 
+      ░  ░      ░    ░  ░         ░           ░  ░  ░    ░ ░     ░              ░    ░    
+                                                                                   ░
+</pre>
+
+</details>
 
 AgentHound is a [BloodHound OpenGraph](https://specterops.io/opengraph/) collector for AI agent ecosystems. It models AI assistants (Cursor, Claude Code, Claude Desktop, VS Code, Zed) alongside the MCP servers they consume, the non-human identities (NHIs) those servers authenticate as, and the cloud and SaaS resources reachable through the resulting chain.
 
-Where traditional identity graphs treat edges as *permissions an identity holds*, AgentHound adds a second edge class: **coercion edges** — the relationship "this identity can be made to do X by untrusted input reaching its context window." Prompt injection becomes a first-class graph primitive, and reachability queries can answer the previously unanswerable question: *"if untrusted content reaches this developer's AI assistant, what's the production blast radius in N tool-call hops?"*
+Where traditional identity graphs treat edges as *permissions an identity holds*, AgentHound adds a second edge class, **coercion edges**: the relationship "this identity can be made to do X by untrusted input reaching its context window." Prompt injection becomes a first-class graph primitive, and reachability queries can answer the previously unanswerable question: *"if untrusted content reaches this developer's AI assistant, what's the production blast radius in N tool-call hops?"*
+
+## The graph model
+
+AgentHound maps one chain (**developer → AI assistant → MCP server → tool → non-human identity → cloud/SaaS resource**) and overlays *coercion edges* (dotted) that model prompt-injection reachability:
+
+```mermaid
+flowchart LR
+    Dev([Developer]) -->|TRUSTS| Agent([AI Agent])
+    Agent -->|RUNS_AS| RT([AgentRuntime])
+    RT -->|CAN_READ_CRED| NHI([NHI])
+    Server([MCPServer]) -->|EXPOSES| Tool([MCPTool])
+    Agent -->|CALLS_TOOL| Tool
+    Tool -->|AUTHENTICATES_AS| NHI
+    NHI -->|GRANTS_ACCESS| Res([Resource])
+    NHI -->|CAN_ASSUME| NHI2([NHI])
+    Inj[/InjectableInput/] -.->|COERCES| Agent
+    Tool -.->|IS_INJECTION_SOURCE| Inj
+    Agent -.->|ESCALATES_VIA| Tool
+    classDef coerce fill:#ffd6d6,stroke:#c0392b,color:#000;
+    class Inj coerce;
+```
+
+*Solid = permission edges (authority an identity legitimately holds). Dotted = coercion edges (the novel contribution: untrusted input steering an agent into using that authority).*
+
+## Highlights
+
+- **Coercion edges:** prompt-injection reachability as a first-class graph relationship, not just static permissions.
+- **The whole chain:** the only open-source tool that graphs the full agent → MCP → NHI → resource path; others scan servers in isolation.
+- **Real multi-cloud permissions:** resolves actual AWS / GCP / Azure access from read-only exports, with **evidence-based** admin flags read from policy *content*, never a role's name.
+- **Network-free and upload-only:** never calls a cloud API or an MCP server; it only reads local files you provide. Air-gap friendly.
+- **Never reads secret values:** records credential *presence and identifiers* only (profile names, key filenames, ARNs), never the secrets themselves, enforced by a test that fails CI on regression.
+- **BloodHound-native:** emits OpenGraph JSON that ingests straight into BloodHound CE; query attack paths in Cypher.
+- **Engagement guardrails:** an optional scope file (deny-wins providers/paths, authorization expiry, time windows) plus a tamper-evident, HMAC hash-chained audit log.
+- **~50 MCP servers classified** out of the box, extensible with a registry overlay.
+
+## Who it's for
+
+- **Red / purple teams:** map the production blast radius of a coerced AI assistant on an authorized engagement.
+- **Blue teams and platform engineers:** inventory which assistants hold which credentials and which untrusted-input sources reach which sink tools, then shrink that surface.
+- **Security researchers:** a graph substrate for reasoning about prompt-injection reachability across an agent fleet.
+
 ## Why
 
-Non-human identities are now the dominant cloud breach vector and agentic AI is accelerating NHI proliferation past what existing IAM tooling can govern. Developer-side AI assistants routinely hold the union of every credential a developer has — GitHub PATs, AWS profiles, kube configs, npm tokens, MCP server OAuth tokens — and most organizations have no visibility into the resulting blast radius.
+Non-human identities are now the dominant cloud breach vector and agentic AI is accelerating NHI proliferation past what existing IAM tooling can govern. Developer-side AI assistants routinely hold the union of every credential a developer has (GitHub PATs, AWS profiles, kube configs, npm tokens, MCP server OAuth tokens), and most organizations have no visibility into the resulting blast radius.
 
 The existing MCP security tool ecosystem (Snyk agent-scan, Invariant mcp-scan, Cisco mcp-scanner, AQtive Guard) scans individual servers in isolation. None of them graph the full agent → MCP → NHI → resource chain. AgentHound is the open-source attack path tool for that chain.
 
 ## What it does
 
-- **`agenthound local`** — scans the current machine for installed AI assistants, their configured MCP servers, and reachable credentials. Produces an inventory of agent nodes, runtime nodes, and the credentials each agent's runtime can pick up from environment variables, profile files, and config dirs.
-- **`agenthound offline`** — analyze an *offline host* (one you're not on) from a captured `.tar.gz` of its config/credential paths, rather than scanning a live machine. "Offline" refers to the target, not the tool — AgentHound is network-free either way; this is the "capture cheap on the engagement host, analyze in a clean room" workflow. Produces the same graph as `local`; untrusted archives are extracted defensively (no path traversal or escaping links).
-- **`agenthound mcp`** — parses a curated MCP server inventory file (YAML or JSON) and emits its nodes and edges. Useful for modeling documented fleets without touching each developer's machine.
-- **`agenthound aws-iam`** — resolves *real* AWS permissions from an uploaded `aws iam get-account-authorization-details` export. Emits each identity, the resources its policies grant (`GRANTS_ACCESS`), an evidence-based admin flag (from the `AdministratorAccess` policy or an `Allow *` on `*` — never the role's name), and `CAN_ASSUME` edges from role trust policies. **You** run the read-only AWS command and hand AgentHound the file; the tool never calls AWS, so it stays network-free.
-- **`agenthound gcp-iam`** — the GCP analogue: resolves *real* GCP permissions from an uploaded `gcloud asset search-all-iam-policies` export. Emits each binding member as an NHI, the resources its bindings grant (`GRANTS_ACCESS`), an evidence-based admin flag (`roles/owner` — GCP's own basic role, never a custom-role name), and `CAN_ASSUME` edges for **service-account impersonation** (`serviceAccountTokenCreator` / `serviceAccountUser` / `workloadIdentityUser` on an SA). Upload-only — the tool never calls GCP.
-- **`agenthound azure-rbac`** — the Azure analogue: resolves *real* Azure permissions from an uploaded RBAC export (`az role assignment list` plus, recommended, `az role definition list`). Emits each principal as an NHI, the scopes its assignments grant (`GRANTS_ACCESS`), and an evidence-based admin flag (action `*` with no `notActions` — the built-in Owner role, never a role name). Upload-only — the tool never calls Azure.
-- **`agenthound infer`** — runs the coercion inference pass over collected nodes, emitting `COERCES` edges from injectable input sources through agents into the tools and identities they can reach.
-- **`agenthound emit`** — produces a BloodHound OpenGraph JSON payload ready for ingestion into BloodHound CE.
-- **`agenthound verify-audit`** — re-walks the HMAC hash-chain of an audit log written during a scoped run and reports the first line that was edited, deleted, or reordered.
+A four-stage pipeline: **collect** (`local` / `offline` / `mcp` / `aws-iam` / `gcp-iam` / `azure-rbac`), then **infer** coercion edges, then **emit** BloodHound JSON. Plus scope enforcement and a tamper-evident audit log for authorized engagements.
+
+- **`agenthound local`**: scans the current machine for installed AI assistants, their configured MCP servers, and reachable credentials. Produces an inventory of agent nodes, runtime nodes, and the credentials each agent's runtime can pick up from environment variables, profile files, and config dirs.
+- **`agenthound offline`**: analyze an *offline host* (one you're not on) from a captured `.tar.gz` of its config/credential paths, rather than scanning a live machine. "Offline" refers to the target, not the tool; AgentHound is network-free either way. This is the "capture cheap on the engagement host, analyze in a clean room" workflow. Produces the same graph as `local`; untrusted archives are extracted defensively (no path traversal or escaping links).
+- **`agenthound mcp`**: parses a curated MCP server inventory file (YAML or JSON) and emits its nodes and edges. Useful for modeling documented fleets without touching each developer's machine.
+- **`agenthound aws-iam`**: resolves *real* AWS permissions from an uploaded `aws iam get-account-authorization-details` export. Emits each identity, the resources its policies grant (`GRANTS_ACCESS`), an evidence-based admin flag (from the `AdministratorAccess` policy or an `Allow *` on `*`, never the role's name), and `CAN_ASSUME` edges from role trust policies. **You** run the read-only AWS command and hand AgentHound the file; the tool never calls AWS, so it stays network-free.
+- **`agenthound gcp-iam`**: the GCP analogue. Resolves *real* GCP permissions from an uploaded `gcloud asset search-all-iam-policies` export. Emits each binding member as an NHI, the resources its bindings grant (`GRANTS_ACCESS`), an evidence-based admin flag (`roles/owner`, GCP's own basic role, never a custom-role name), and `CAN_ASSUME` edges for **service-account impersonation** (`serviceAccountTokenCreator` / `serviceAccountUser` / `workloadIdentityUser` on an SA). Upload-only; the tool never calls GCP.
+- **`agenthound azure-rbac`**: the Azure analogue. Resolves *real* Azure permissions from an uploaded RBAC export (`az role assignment list` plus, recommended, `az role definition list`). Emits each principal as an NHI, the scopes its assignments grant (`GRANTS_ACCESS`), and an evidence-based admin flag (action `*` with no `notActions`, the built-in Owner role, never a role name). Upload-only; the tool never calls Azure.
+- **`agenthound infer`**: runs the coercion inference pass over collected nodes, emitting `COERCES` edges from injectable input sources through agents into the tools and identities they can reach.
+- **`agenthound emit`**: produces a BloodHound OpenGraph JSON payload ready for ingestion into BloodHound CE.
+- **`agenthound verify-audit`**: re-walks the HMAC hash-chain of an audit log written during a scoped run and reports the first line that was edited, deleted, or reordered.
 
 ## Node and edge taxonomy
 
@@ -32,7 +99,7 @@ The existing MCP security tool ecosystem (Snyk agent-scan, Invariant mcp-scan, C
 | `AgentRuntime` | Where the agent runs (workstation, Codespace, CI runner, server) |
 | `MCPServer` | A configured MCP server, local or remote |
 | `MCPTool` | An individual tool function exposed by an MCP server |
-| `NHI` | A non-human identity — OAuth app, service account, API key, certificate |
+| `NHI` | A non-human identity: OAuth app, service account, API key, certificate |
 | `Resource` | A reachable resource (S3 bucket, Salesforce object, repo, database) |
 | `InjectableInput` | A source of untrusted content that can reach an agent's context |
 | `Developer` | A human principal whose credentials the agent runtime can access |
@@ -81,8 +148,8 @@ See `cypher/queries.yaml` for the full query library (already in emitted form).
 
 ## Requirements
 
-- **Python 3.11–3.14**, **git**, and Linux / macOS / Windows.
-- Pure-Python with **no network calls** — AgentHound only reads local files.
+- **Python 3.11-3.14**, **git**, and Linux / macOS / Windows.
+- Pure-Python with **no network calls**; AgentHound only reads local files.
 
 ## Install
 
@@ -111,7 +178,7 @@ pip install -e ".[dev]"
 Verify it worked:
 
 ```bash
-agenthound --version               # -> 0.2.0
+agenthound --version               # -> 0.2.2
 agenthound --help                  # lists the subcommands
 ```
 
@@ -137,7 +204,7 @@ agenthound offline capture.tgz -o local.json
 agenthound mcp -i examples/mcp_inventory.yaml -o mcp.json
 
 # Resolve real cloud permissions from exports you generate yourself
-# (network-free — AgentHound never calls the cloud):
+# (network-free; AgentHound never calls the cloud):
 #   aws iam get-account-authorization-details > iam.json
 #   gcloud asset search-all-iam-policies --scope=organizations/ORG_ID --format=json > gcp_iam.json
 #   az role assignment list --all -o json   # combine with `az role definition list -o json`
@@ -152,21 +219,28 @@ agenthound infer local.json mcp.json aws.json gcp.json azure.json -o graph.json
 agenthound emit graph.json -o bloodhound.json
 ```
 
-Ingest `bloodhound.json` into BloodHound CE via Settings → Manage data → Upload, or the `/api/v2/graphs/ingest` endpoint.
+Ingest `bloodhound.json` into BloodHound CE via **Settings → Administration → Manage data → Upload Files**, or the file-upload API (`/api/v2/file-upload`).
 
 ### Try it without touching your real machine
 
 Two self-contained scripts build throwaway synthetic data in a temp dir, run the
-pipeline, and clean up after themselves — nothing touches your real `$HOME`:
+pipeline, and clean up after themselves, so nothing touches your real `$HOME`:
 
 ```bash
 bash examples/run_demo.sh        # full collect -> infer -> emit; prints blast-radius paths
 bash examples/try_offline.sh     # exercises `offline` mode and its safe-extraction guard
+bash examples/try_clouds.sh      # runs all three cloud collectors on bundled example exports
 ```
 
 `run_demo.sh` builds a synthetic developer home and walks the resulting graph to print
 the production blast-radius paths. `try_offline.sh` captures that home into a tarball and
 verifies `agenthound offline` reproduces the same graph and refuses a path-traversal archive.
+
+For a richer, production-shaped target, `examples/acme-corp/` is a **fake** AWS + GCP + Azure
+org (identity/permission metadata only, no secrets) with deliberately planted findings.
+`bash examples/acme-corp/run.sh` runs the three cloud collectors over it and prints the
+full-access ("admin") identities and the assume-role / impersonation escalation edges. It is
+a find-and-replace-the-placeholders starting point for pointing AgentHound at your own org.
 
 ## Running under an engagement scope
 
@@ -181,8 +255,8 @@ agenthound verify-audit audit.jsonl                  # the audit_log path named 
 ```
 
 The scope file declares the engagement name, authorization expiry, allowed/denied providers and
-paths, time windows, and the audit-log path. A denied provider produces **no node and no edge** —
-the data is never collected. See [docs/AUTHORIZED-USE.md](docs/AUTHORIZED-USE.md) for the full model.
+paths, time windows, and the audit-log path. A denied provider produces **no node and no edge**.
+The data is never collected. See [docs/AUTHORIZED-USE.md](docs/AUTHORIZED-USE.md) for the full model.
 
 ## Extending the MCP server registry
 
@@ -204,20 +278,20 @@ Progress is tracked in [GitHub Issues](https://github.com/Yorji-Porji/AgentHound
 
 ## Documentation
 
-- [docs/ATTACK-MAPPING.md](docs/ATTACK-MAPPING.md) — every collector and edge mapped to MITRE ATT&CK and ATLAS techniques.
-- [docs/AUTHORIZED-USE.md](docs/AUTHORIZED-USE.md) — defensive, analysis-only posture and the built-in engagement guardrails.
-- [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md) — trust boundaries, abuse cases, and what the tamper-evident audit log does and does not guarantee.
-- [docs/RELEASES.md](docs/RELEASES.md) — how releases are Sigstore-signed and how to verify a downloaded artifact's provenance.
-- [CHANGELOG.md](CHANGELOG.md) — what shipped in each release.
+- [docs/ATTACK-MAPPING.md](docs/ATTACK-MAPPING.md): every collector and edge mapped to MITRE ATT&CK and ATLAS techniques.
+- [docs/AUTHORIZED-USE.md](docs/AUTHORIZED-USE.md): defensive, analysis-only posture and the built-in engagement guardrails.
+- [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md): trust boundaries, abuse cases, and what the tamper-evident audit log does and does not guarantee.
+- [docs/RELEASES.md](docs/RELEASES.md): how releases are Sigstore-signed and how to verify a downloaded artifact's provenance.
+- [CHANGELOG.md](CHANGELOG.md): what shipped in each release.
 
 ## Prior art
 
-- [BloodHound](https://github.com/SpecterOps/BloodHound) and OpenGraph by SpecterOps — the graph framework AgentHound is a collector for
-- [GitHound](https://github.com/SpecterOps/GitHound) — SpecterOps' official OpenGraph collector for GitHub
-- [PrivHound](https://github.com/dazzyddos/PrivHound) — community OpenGraph collector for Windows local privesc, a good example of the collector pattern
-- [Snyk agent-scan](https://github.com/snyk/agent-scan) — closest analogue in the MCP space; auto-discovers agent configs and scans them, but is a static analyzer rather than a graph
-- [Invariant mcp-scan](https://github.com/invariantlabs-ai/mcp-scan) — MCP tool-description scanner for tool poisoning and rug pulls
-- OWASP MCP Top 10 (beta, 2026) — the risk taxonomy AgentHound's coercion edges map against
+- [BloodHound](https://github.com/SpecterOps/BloodHound) and OpenGraph by SpecterOps: the graph framework AgentHound is a collector for
+- [GitHound](https://github.com/SpecterOps/GitHound): SpecterOps' official OpenGraph collector for GitHub
+- [PrivHound](https://github.com/dazzyddos/PrivHound): community OpenGraph collector for Windows local privesc, a good example of the collector pattern
+- [Snyk agent-scan](https://github.com/snyk/agent-scan): closest analogue in the MCP space; auto-discovers agent configs and scans them, but is a static analyzer rather than a graph
+- [Invariant mcp-scan](https://github.com/invariantlabs-ai/mcp-scan): MCP tool-description scanner for tool poisoning and rug pulls
+- OWASP MCP Top 10 (beta, 2026): the risk taxonomy AgentHound's coercion edges map against
 
 ## License
 
