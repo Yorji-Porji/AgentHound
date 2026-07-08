@@ -6,6 +6,26 @@
 
 [![CI](https://github.com/Yorji-Porji/AgentHound/actions/workflows/ci.yml/badge.svg)](https://github.com/Yorji-Porji/AgentHound/actions/workflows/ci.yml) [![Python](https://img.shields.io/badge/python-3.11--3.14-blue.svg)](https://www.python.org/) [![License](https://img.shields.io/badge/license-Apache_2.0-green.svg)](LICENSE) ![Status](https://img.shields.io/badge/status-alpha-orange.svg)
 
+</div>
+
+<details>
+<summary>ASCII banner (text version)</summary>
+
+<pre>
+ ▄▄▄        ▄████ ▓█████  ███▄    █ ▄▄▄█████▓ ██░ ██  ▒█████   █    ██  ███▄    █ ▓█████▄ 
+▒████▄     ██▒ ▀█▒▓█   ▀  ██ ▀█   █ ▓  ██▒ ▓▒▓██░ ██▒▒██▒  ██▒ ██  ▓██▒ ██ ▀█   █ ▒██▀ ██▌
+▒██  ▀█▄  ▒██░▄▄▄░▒███   ▓██  ▀█ ██▒▒ ▓██░ ▒░▒██▀▀██░▒██░  ██▒▓██  ▒██░▓██  ▀█ ██▒░██   █▌
+░██▄▄▄▄██ ░▓█  ██▓▒▓█  ▄ ▓██▒  ▐▌██▒░ ▓██▓ ░ ░▓█ ░██ ▒██   ██░▓▓█  ░██░▓██▒  ▐▌██▒░▓█▄   ▌
+ ▓█   ▓██▒░▒▓███▀▒░▒████▒▒██░   ▓██░  ▒██▒ ░ ░▓█▒░██▓░ ████▓▒░▒▒█████▓ ▒██░   ▓██░░▒████▓ 
+ ▒▒   ▓▒█░ ░▒   ▒ ░░ ▒░ ░░ ▒░   ▒ ▒   ▒ ░░    ▒ ░░▒░▒░ ▒░▒░▒░ ░▒▓▒ ▒ ▒ ░ ▒░   ▒ ▒  ▒▒▓  ▒ 
+  ▒   ▒▒ ░  ░   ░  ░ ░  ░░ ░░   ░ ▒░    ░     ▒ ░▒░ ░  ░ ▒ ▒░ ░░▒░ ░ ░ ░ ░░   ░ ▒░ ░ ▒  ▒ 
+  ░   ▒   ░ ░   ░    ░      ░   ░ ░   ░       ░  ░░ ░░ ░ ░ ▒   ░░░ ░ ░    ░   ░ ░  ░ ░  ░ 
+      ░  ░      ░    ░  ░         ░           ░  ░  ░    ░ ░     ░              ░    ░    
+                                                                                   ░
+</pre>
+
+</details>
+
 AgentHound is a [BloodHound OpenGraph](https://specterops.io/opengraph/) collector for AI agent ecosystems. It models AI assistants (Cursor, Claude Code, Claude Desktop, VS Code, Zed) alongside the MCP servers they consume, the non-human identities (NHIs) those servers authenticate as, and the cloud and SaaS resources reachable through the resulting chain.
 
 Where traditional identity graphs treat edges as *permissions an identity holds*, AgentHound adds a second edge class, **coercion edges**: the relationship "this identity can be made to do X by untrusted input reaching its context window." Prompt injection becomes a first-class graph primitive, and reachability queries can answer the previously unanswerable question: *"if untrusted content reaches this developer's AI assistant, what's the production blast radius in N tool-call hops?"*
