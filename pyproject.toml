@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agenthound"
-version = "0.2.1"
+version = "0.2.2"
 description = "Graph-based attack path mapping for AI agents, MCP servers, and the NHIs they reach"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
