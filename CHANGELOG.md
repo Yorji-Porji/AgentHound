@@ -26,6 +26,16 @@ the graph schema and CLI surface may change between releases.
   Owner role, never a role name; falls back to the fixed `Owner` name when role
   definitions are absent). Upload-only; **the tool never calls Azure**.
 
+### Fixed
+
+- **Cypher query library** (`cypher/queries.yaml`): every query now RETURNs a
+  path or nodes so it renders in BloodHound CE's Explore -> Cypher tab (scalar
+  and aggregate returns drew a blank canvas). Also fixes two BloodHound CE parser
+  incompatibilities found by testing against a live instance: an unsupported
+  `EXISTS` subquery (replaced with a pattern predicate) and use of the reserved
+  word `start` as a variable name (renamed to `src`). The header now documents
+  the Search / Pathfinding / Cypher modes and these gotchas.
+
 ## [0.2.1] — 2026-06-13
 
 Corrective release: ships the AWS collectors that the `v0.2.0` tag documented but

@@ -1,20 +1,29 @@
 # AgentHound Cypher query library.
 #
-# Each query is a YAML record with:
-#   id: short snake_case identifier
-#   title: human label
-#   description: what the query answers
-#   risk_category: how to think about results
-#   cypher: the actual query
+# Each query is a YAML record with: id, title, description, risk_category, and
+# the cypher itself. Paste a `cypher` block into BloodHound CE's
+# Explore -> Cypher tab.
 #
-# Drop into BloodHound CE's Explore → Cypher tab.
+# HOW THESE WORK ACROSS BLOODHOUND'S THREE EXPLORE MODES
+#   * Cypher (Explore -> Cypher): paste a query below. BloodHound renders a
+#     GRAPH, so every query here RETURNs a path (`p`) or nodes, never a scalar
+#     table. A query that returns counts or `.name` strings draws a blank canvas.
+#   * Pathfinding (Explore -> Pathfinding): pick a start node and an end node
+#     (for example an InjectableInput and a production Resource); BloodHound
+#     walks the same edges these queries use. Seed the picker with Search.
+#   * Search: type a node name to find it, then right-click to expand its edges.
 #
-# IMPORTANT — kind names are PascalCase here, matching what AgentHound *emits*,
-# not the SCREAMING_SNAKE internal enum values. The exporter sanitizes kinds on
-# emission, so the graph in BloodHound uses: Coerces, CallsTool, Exposes,
-# AuthenticatesAs, GrantsAccess, CanReadCred, RunsAs, EscalatesVia — and the NHI
-# node kind is emitted as `Nhi`. Querying with the internal names (:COERCES,
-# :NHI, …) matches nothing.
+# BLOODHOUND CE CYPHER GOTCHAS (all confirmed by testing against a live instance)
+#   * Kind names are the emitted PascalCase forms, not the internal
+#     SCREAMING_SNAKE enums. Use Coerces, CallsTool, Exposes, AuthenticatesAs,
+#     GrantsAccess, CanReadCred, RunsAs, EscalatesVia, CanAssume, and the `Nhi`
+#     node kind. Querying `:COERCES` or `:NHI` matches nothing.
+#   * RETURN a path or nodes so the result renders. Scalar or aggregate RETURNs
+#     (counts, `.name`) produce an empty canvas; run those in the Neo4j browser
+#     at :7474, which has a table view.
+#   * `start` is a reserved word; do not use it as a variable name (use `src`).
+#   * `EXISTS { MATCH ... }` subqueries are not supported; use a pattern
+#     predicate in WHERE instead, for example WHERE NOT ( (a)-[:Rel]->(b) ).
 
 queries:
 
@@ -23,92 +32,94 @@ queries:
     description: >
       For every untrusted-content source that can coerce an agent, find every
       production resource reachable in up to four tool-call hops. The headline
-      demo query.
+      demo query; it renders one or more full injection-to-production paths,
+      shortest first.
     risk_category: critical
     cypher: |
-      MATCH path = (i:InjectableInput)-[:Coerces]->(a:Agent)
+      MATCH p = (i:InjectableInput)-[:Coerces]->(a:Agent)
              -[:CallsTool*1..4]->(t:MCPTool)
              -[:AuthenticatesAs]->(n:Nhi)
              -[:GrantsAccess]->(r:Resource)
       WHERE r.tier = 'production'
-      RETURN path, length(path) AS hops
-      ORDER BY hops ASC
+      RETURN p
+      ORDER BY length(p) ASC
       LIMIT 25
 
   - id: agents_with_excessive_tool_surface
     title: Agents with broadest reachable tool surface
     description: >
-      Counts the number of distinct MCP tools each agent can call. Outliers
-      are the agents with the largest blast radius — usually the ones with
-      every MCP server enabled by default.
+      Renders every agent and the MCP tools it can reach via CallsTool. The
+      agent with the most edges (the biggest hub) is the outlier with the
+      largest blast radius, usually the one with every MCP server enabled by
+      default. For the exact per-agent count as a table, run the same MATCH with
+      `RETURN a.name, count(DISTINCT t)` in the Neo4j browser at :7474.
     risk_category: hygiene
     cypher: |
-      MATCH (a:Agent)-[:CallsTool]->(t:MCPTool)
-      RETURN a.name AS agent, count(DISTINCT t) AS tool_count
-      ORDER BY tool_count DESC
-      LIMIT 20
+      MATCH p = (a:Agent)-[:CallsTool]->(t:MCPTool)
+      RETURN p
+      LIMIT 500
 
   - id: indirect_injection_to_cloud_mutator
     title: Indirect-injection paths to cloud-mutating tools
     description: >
       Indirect injection (poisoned README, malicious email, planted Jira
       comment) is the highest-impact vector because the user does not realize
-      they are introducing attacker content. This query surfaces every chain
-      that ends in a cloud-mutating sink.
+      they are introducing attacker content. This renders every chain from an
+      indirect injection source through an agent into a cloud-mutating sink tool.
     risk_category: critical
     cypher: |
-      MATCH (i:InjectableInput)-[c:Coerces]->(a:Agent)
-            -[:EscalatesVia]->(t:MCPTool)
+      MATCH p = (i:InjectableInput)-[c:Coerces]->(a:Agent)
+                -[:EscalatesVia]->(t:MCPTool)
       WHERE c.injection_class = 'indirect'
         AND any(tag IN t.classification WHERE tag = 'cloud_mutator')
-      RETURN i.name AS source, a.name AS agent, t.name AS sink_tool
+      RETURN p
 
   - id: orphaned_nhis_with_production_access
     title: NHIs the runtime can read but no agent currently uses
     description: >
       Credentials sitting on the developer machine that are reachable but no
       currently-installed agent has been configured to use them. These are
-      classic "ghost access" cases — high-value cleanup targets for the blue
-      team.
+      classic ghost-access cases, high-value cleanup targets for the blue team.
+      Uses a pattern predicate rather than an EXISTS subquery, which BloodHound
+      CE does not support.
     risk_category: hygiene
     cypher: |
-      MATCH (rt:AgentRuntime)-[:CanReadCred]->(n:Nhi)
-            -[:GrantsAccess]->(r:Resource {tier: 'production'})
-      WHERE NOT EXISTS {
-        MATCH (a:Agent)-[:RunsAs]->(rt)
-        MATCH (a)-[:CallsTool]->(:MCPTool)-[:AuthenticatesAs]->(n)
-      }
-      RETURN rt.name, n.name, r.name
+      MATCH p = (rt:AgentRuntime)-[:CanReadCred]->(n:Nhi)
+                -[:GrantsAccess]->(r:Resource {tier: 'production'})
+      WHERE NOT ( (n)<-[:AuthenticatesAs]-(:MCPTool)<-[:CallsTool]-(:Agent)-[:RunsAs]->(rt) )
+      RETURN p
+      LIMIT 25
 
   - id: shadow_mcp_servers
     title: Unclassified MCP servers (potential shadow IT)
     description: >
-      MCP servers that did not match the known-server registry. These are
-      either novel third-party servers (likely benign) or unsanctioned ones
-      configured by individual developers. Worth manual review either way.
+      MCP servers that did not match the known-server registry, so their tools
+      are tagged unclassified. These are either novel third-party servers
+      (likely benign) or unsanctioned ones configured by individual developers.
+      Renders each such server and its exposed tools; read `config_source` on the
+      server node for where it was found.
     risk_category: hygiene
     cypher: |
-      MATCH (s:MCPServer)-[:Exposes]->(t:MCPTool)
+      MATCH p = (s:MCPServer)-[:Exposes]->(t:MCPTool)
       WHERE any(c IN t.classification WHERE c = 'unclassified')
-      RETURN s.name AS server, s.config_source AS config_path
+      RETURN p
 
   - id: aws_role_assumption_escalation
     title: AWS privilege escalation via role-assumption chains
     description: >
       Walks the CanAssume graph from local AWS profiles. Each hop is one
-      assume-role wiring (role_arn + source_profile) in a developer's
+      assume-role wiring (role_arn plus source_profile) in a developer's
       ~/.aws/config; chained together they reveal an identity that can reach far
-      more powerful roles than it holds directly — often across accounts.
-      Topology only: what each role can actually DO comes from the aws-iam
-      collector's GrantsAccess edges.
+      more powerful roles than it holds directly, often across accounts. Topology
+      only: what each role can actually do comes from the aws-iam collector's
+      GrantsAccess edges. Note `start` is reserved in BloodHound CE, so the start
+      node is named `src`.
     risk_category: critical
     cypher: |
-      MATCH path = (start:Nhi)-[:CanAssume*1..5]->(role:Nhi)
-      WHERE start.nhi_type = 'aws_profile'
-      RETURN start.name  AS from_identity,
-             role.name   AS reachable_role,
-             length(path) AS hops
-      ORDER BY hops DESC
+      MATCH p = (src:Nhi)-[:CanAssume*1..5]->(dst:Nhi)
+      WHERE src.nhi_type = 'aws_profile'
+      RETURN p
+      ORDER BY length(p) DESC
       LIMIT 25
 
   - id: gcp_service_account_impersonation_escalation
@@ -117,34 +128,32 @@ queries:
       Walks the CanAssume graph the gcp-iam collector draws from impersonation
       bindings (serviceAccountTokenCreator / serviceAccountUser /
       workloadIdentityUser on a service account). Each hop is one identity that
-      can mint tokens for — i.e. act as — a service account; chained together
+      can mint tokens for, that is act as, a service account; chained together
       they reveal a member that can reach a far more powerful service account
-      than it holds directly. The headline finding is a chain that lands on an
-      SA flagged grants_full_access (roles/owner).
+      than it holds directly. The headline finding is a chain that lands on an SA
+      flagged grants_full_access (roles/owner).
     risk_category: critical
     cypher: |
-      MATCH path = (start:Nhi)-[:CanAssume*1..5]->(sa:Nhi)
-      WHERE start.provider = 'gcp' AND sa.grants_full_access = true
-      RETURN start.name  AS from_identity,
-             sa.name     AS reachable_sa,
-             length(path) AS hops
-      ORDER BY hops DESC
+      MATCH p = (src:Nhi)-[:CanAssume*1..5]->(dst:Nhi)
+      WHERE src.provider = 'gcp' AND dst.grants_full_access = true
+      RETURN p
+      ORDER BY length(p) DESC
       LIMIT 25
 
   - id: injection_to_full_access_identity
     title: Injection paths reaching an admin / full-access cloud identity
     description: >
       The aws-iam, gcp-iam, and azure-rbac collectors all flag identities whose
-      policies grant unrestricted access (grants_full_access — an AWS Allow *:*
-      / AdministratorAccess, GCP roles/owner, or Azure Owner). This finds
+      policies grant unrestricted access (grants_full_access: an AWS Allow *:* or
+      AdministratorAccess, GCP roles/owner, or Azure Owner). This finds
       untrusted-content sources that can coerce an agent into a tool backed by
-      such an identity — independent of resource tier (cloud-export resources are
+      such an identity, independent of resource tier (cloud-export resources are
       tier-unknown until tagged, so this complements the production-tier
       blast-radius query).
     risk_category: critical
     cypher: |
-      MATCH path = (i:InjectableInput)-[:Coerces]->(a:Agent)
+      MATCH p = (i:InjectableInput)-[:Coerces]->(a:Agent)
              -[:CallsTool*1..4]->(t:MCPTool)-[:AuthenticatesAs]->(n:Nhi)
       WHERE n.grants_full_access = true
-      RETURN path
+      RETURN p
       LIMIT 25
