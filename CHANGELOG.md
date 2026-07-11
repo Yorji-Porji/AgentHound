@@ -4,6 +4,18 @@ Notable changes to AgentHound. The format is loosely based on
 [Keep a Changelog](https://keepachangelog.com/). AgentHound is in **alpha** —
 the graph schema and CLI surface may change between releases.
 
+## [Unreleased]
+
+### Fixed
+
+- **Cypher query library** (`cypher/queries.yaml`): every query now returns a
+  path or nodes so it renders in BloodHound CE's Explore -> Cypher tab (scalar
+  and aggregate returns drew a blank canvas). Also fixes two BloodHound CE parser
+  incompatibilities found by testing against a live instance: an unsupported
+  `EXISTS` subquery (replaced with a pattern predicate) and use of the reserved
+  word `start` as a variable name (renamed to `src`). The header now documents
+  the Search / Pathfinding / Cypher modes and these gotchas.
+
 ## [0.2.2] - 2026-07-05
 
 ### Added
