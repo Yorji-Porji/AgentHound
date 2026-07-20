@@ -126,13 +126,13 @@ A four-stage pipeline: **collect** (`local` / `offline` / `mcp` / `aws-iam` / `g
 ## Headline query
 
 ```cypher
-MATCH path = (i:InjectableInput)-[:Coerces]->(a:Agent)
+MATCH p = (i:InjectableInput)-[:Coerces]->(a:Agent)
        -[:CallsTool*1..4]->(t:MCPTool)
        -[:AuthenticatesAs]->(n:Nhi)
        -[:GrantsAccess]->(r:Resource)
 WHERE r.tier = 'production'
-RETURN path, length(path) AS hops
-ORDER BY hops ASC
+RETURN p
+ORDER BY length(p) ASC
 LIMIT 25
 ```
 
