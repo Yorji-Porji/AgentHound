@@ -160,6 +160,11 @@ python3 - "$WORK/bloodhound.json" <<'PY'
 import json, sys
 from collections import defaultdict, deque
 
+# Windows consoles default to cp1252, which cannot encode the box-drawing
+# characters in the path listing below. Force UTF-8 so this prints everywhere
+# instead of dying with UnicodeEncodeError partway through the results.
+sys.stdout.reconfigure(encoding="utf-8")
+
 data = json.load(open(sys.argv[1]))
 nodes = {n["id"]: n for n in data["graph"]["nodes"]}
 adj = defaultdict(list)

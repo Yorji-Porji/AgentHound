@@ -50,6 +50,11 @@ AH emit "$WORK/merged.json" -o "$WORK/acme-bloodhound.json" >/dev/null
 
 "$PYBIN" - "$WORK/acme-bloodhound.json" <<'PYEOF'
 import json, sys
+
+# Same guard as examples/run_demo.sh: Windows consoles default to cp1252 and
+# this report prints non-ASCII. Force UTF-8 so it cannot die mid-report.
+sys.stdout.reconfigure(encoding="utf-8")
+
 g = json.load(open(sys.argv[1]))["graph"]
 nodes = {n["id"]: n for n in g["nodes"]}
 def prop(nid, k): return nodes[nid]["properties"].get(k) if nid in nodes else None
