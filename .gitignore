@@ -48,15 +48,12 @@ htmlcov/
 *.swo
 .DS_Store
 
-# Personal planning
-.planning/
-
 # Generated outputs (regenerate with examples/run_demo.sh)
 *.json.tmp
 out/
 demo_output/
 # Pipeline artifacts produced by the README quickstart (collect -> infer -> emit).
-# Host-specific recon output — never commit these.
+# Host-specific recon output, never commit these.
 bloodhound.json
 local.json
 mcp.json
@@ -65,5 +62,21 @@ graph.json
 *_out.json
 audit.jsonl
 engagement-audit.jsonl
-# Local engagement scope files — host-specific, not part of the project.
+# Catch-all for a pipeline run written to a name not listed above
+# (`agenthound local -o myscan.json`). Root-anchored, so the tracked JSON under
+# schemas/, tests/fixtures/, examples/, and bloodhound/ is unaffected. A root
+# JSON file that genuinely belongs in the repo can still be added with `git add -f`.
+/*.json
+# Local engagement scope files, host-specific, not part of the project.
 scope.yaml
+
+# Third-party tooling scratch and caches
+.ua/
+
+# Local-only working files, never published. Also listed in .git/info/exclude;
+# duplicated here because that file is not committed and does not survive a
+# fresh clone, so on its own the protection did not travel with the repository.
+.planning/
+local/
+CLAUDE.md
+.claude/

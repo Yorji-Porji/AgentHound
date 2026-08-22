@@ -178,7 +178,7 @@ pip install -e ".[dev]"
 Verify it worked:
 
 ```bash
-agenthound --version               # -> 0.2.2
+agenthound --version               # -> 0.2.3
 agenthound --help                  # lists the subcommands
 ```
 
@@ -220,6 +220,11 @@ agenthound emit graph.json -o bloodhound.json
 ```
 
 Ingest `bloodhound.json` into BloodHound CE via **Settings → Administration → Manage data → Upload Files**, or the file-upload API (`/api/v2/file-upload`).
+
+Once per instance, apply `bloodhound/custom-nodes.json` so AgentHound's node kinds render with
+their own icons instead of a `(?)` placeholder. Icons cannot ride along in an ingest payload, and
+AgentHound never makes network calls, so you POST that file yourself; see
+[bloodhound/README.md](bloodhound/README.md) for the one-liner.
 
 ### Try it without touching your real machine
 

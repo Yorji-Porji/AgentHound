@@ -4,6 +4,30 @@ Notable changes to AgentHound. The format is loosely based on
 [Keep a Changelog](https://keepachangelog.com/). AgentHound is in **alpha** —
 the graph schema and CLI surface may change between releases.
 
+## [0.2.3] - 2026-08-21
+
+### Added
+
+- **Custom BloodHound node icons** (`bloodhound/custom-nodes.json`): gives every
+  AgentHound node kind a Font Awesome icon and colour, so a coercion path reads at
+  a glance instead of rendering as a row of identical `(?)` placeholders. Red is
+  reserved for `InjectableInput` so the untrusted-input entry point stands out from
+  the permission chain. You apply it once per BloodHound instance by POSTing the
+  file to `/api/v2/custom-nodes`; **AgentHound does not upload it**, because icons
+  cannot ride along inside an ingest payload and the tool never makes network calls.
+  See [bloodhound/README.md](bloodhound/README.md) for the command. Keys are the
+  **emitted** PascalCase kind names (`Nhi`, never the internal `NHI`), and
+  `tests/test_custom_icons.py` fails the build if a node kind gains or loses an
+  icon, if an entry is malformed, or if a key is written in the internal form.
+
+### Fixed
+
+- The bundled example scripts (`examples/run_demo.sh`,
+  `examples/acme-corp/run.sh`) now force UTF-8 on their report output instead of
+  dying partway through with a `UnicodeEncodeError` on Windows consoles, which
+  default to cp1252 and cannot encode the box-drawing characters in the path
+  listing.
+
 ## [0.2.2] - 2026-07-05
 
 ### Added
@@ -106,6 +130,7 @@ prompt-injection reachability.
 - Malformed collection files and partial overlay records fail soft (a clear
   error or a skipped record) instead of crashing the CLI.
 
+[0.2.3]: https://github.com/Yorji-Porji/AgentHound/releases/tag/v0.2.3
 [0.2.2]: https://github.com/Yorji-Porji/AgentHound/releases/tag/v0.2.2
 [0.2.1]: https://github.com/Yorji-Porji/AgentHound/releases/tag/v0.2.1
 [0.2.0]: https://github.com/Yorji-Porji/AgentHound/releases/tag/v0.2.0

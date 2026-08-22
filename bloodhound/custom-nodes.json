@@ -1,0 +1,61 @@
+{
+  "_comment": "BloodHound CE custom node icons for AgentHound's node kinds. Icons CANNOT be supplied in an ingest payload, so AgentHound does not upload this file: it never makes network calls (security invariant 2). You POST it yourself, once per BloodHound instance. See bloodhound/README.md. Keys MUST be the emitted PascalCase kind names, which is why the non-human identity kind is 'Nhi' and not 'NHI' - schema/opengraph.py sanitizes kinds on emit, and a key that does not match renders a (?) icon in the UI. Icon names come from the free, solid Font Awesome set and carry no 'fa-' prefix. Colors are #RRGGBB.",
+  "custom_types": {
+    "Developer": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "user",
+        "color": "#64748B"
+      }
+    },
+    "Agent": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "robot",
+        "color": "#7C3AED"
+      }
+    },
+    "AgentRuntime": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "laptop",
+        "color": "#2563EB"
+      }
+    },
+    "MCPServer": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "server",
+        "color": "#0EA5E9"
+      }
+    },
+    "MCPTool": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "wrench",
+        "color": "#0891B2"
+      }
+    },
+    "Nhi": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "key",
+        "color": "#F59E0B"
+      }
+    },
+    "Resource": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "database",
+        "color": "#059669"
+      }
+    },
+    "InjectableInput": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "syringe",
+        "color": "#C0392B"
+      }
+    }
+  }
+}
