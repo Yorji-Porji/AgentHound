@@ -178,7 +178,7 @@ pip install -e ".[dev]"
 Verify it worked:
 
 ```bash
-agenthound --version               # -> 0.2.2
+agenthound --version               # -> 0.2.3
 agenthound --help                  # lists the subcommands
 ```
 
