@@ -18,12 +18,12 @@ it never executes any of them. The mapping below is "what an operator looking
 at this graph is reasoning about," not "what the tool does."
 
 > Scope note: the table reflects edges the current collectors actually emit
-> (`local`, `mcp`, `aws-iam`, `gcp-iam`, `azure-rbac`). `GRANTS_ACCESS` is emitted
+> (`local`, `mcp`, `aws`, `gcp`, `azure`). `GRANTS_ACCESS` is emitted
 > from a `mcp` inventory's declared resources and, as of Phase 2, from **real
 > cloud policies** via the cloud collectors (uploaded IAM/RBAC exports — no live
 > API). `CAN_ASSUME` comes from `local` (`~/.aws/config` assume-role wiring), from
-> role trust policies in `aws-iam`, and from GCP service-account impersonation
-> bindings in `gcp-iam`.
+> role trust policies in `aws`, and from GCP service-account impersonation
+> bindings in `gcp`.
 
 ---
 
@@ -67,7 +67,7 @@ the cloud/SaaS resources those NHIs reach. No live network connection.
 | NHI → cloud/SaaS resource (`GRANTS_ACCESS`) | **T1078.004** Valid Accounts: Cloud Accounts | **AML.T0012** Valid Accounts |
 | MCP server authenticates as NHI (`AUTHENTICATES_AS`) | **T1078** Valid Accounts | **AML.T0012** Valid Accounts |
 
-### `aws-iam` / `gcp-iam` / `azure-rbac` — real cloud permissions (upload-only)
+### `aws` / `gcp` / `azure` — real cloud permissions (upload-only)
 
 `agenthound/collectors/{aws_iam,gcp_iam,azure_rbac}.py` resolve *real* cloud
 permissions from a read-only export the operator generates and uploads — **no

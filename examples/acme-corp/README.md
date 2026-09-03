@@ -21,9 +21,9 @@ KEEP=1 bash examples/acme-corp/run.sh   # also keeps the emitted BloodHound payl
 Or drive the CLI directly:
 
 ```bash
-agenthound aws-iam    -i examples/acme-corp/aws_iam.json    -o aws.json
-agenthound gcp-iam    -i examples/acme-corp/gcp_iam.json    -o gcp.json
-agenthound azure-rbac -i examples/acme-corp/azure_rbac.json -o azure.json
+agenthound aws   -i examples/acme-corp/aws_iam.json    -o aws.json
+agenthound gcp   -i examples/acme-corp/gcp_iam.json    -o gcp.json
+agenthound azure -i examples/acme-corp/azure_rbac.json -o azure.json
 agenthound infer aws.json gcp.json azure.json -o merged.json
 agenthound emit merged.json -o acme-bloodhound.json     # ingest into BloodHound CE
 ```

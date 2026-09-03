@@ -8,6 +8,7 @@ timezone math is deterministic.
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -17,6 +18,9 @@ import pytest
 from freezegun import freeze_time
 from pydantic import ValidationError
 
+from agenthound.collectors.aws_iam import AWSIAMCollector
+from agenthound.collectors.azure_rbac import AzureRBACCollector
+from agenthound.collectors.gcp_iam import GCPIAMCollector
 from agenthound.collectors.local import LocalCollector
 from agenthound.collectors.mcp import MCPCollector
 from agenthound.scope import (
@@ -135,6 +139,13 @@ def test_glob_question_and_literal_dot():
     assert not rx.match("abcXtxt")  # '.' is a literal, not a wildcard
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Windows path matching behavior")
+def test_windows_path_matching_is_case_insensitive(tmp_path: Path):
+    denied = (tmp_path / "Secrets" / "Inventory.JSON").as_posix().upper()
+    candidate = tmp_path / "secrets" / "inventory.json"
+    assert _guard(paths_denied=[denied]).check_path(candidate) is False
+
+
 # --- time windows (SCOPE-12..15) ---------------------------------------------
 
 NY_WINDOW = {
@@ -169,7 +180,18 @@ def test_check_time_no_windows_always_allows():
 def test_timewindow_wraps_past_midnight():
     w = TimeWindow(days=["mon"], start="22:00", end="02:00", tz="UTC")
     assert w.contains(datetime(2026, 6, 1, 23, 0, tzinfo=UTC)) is True
+    assert w.contains(datetime(2026, 6, 2, 1, 0, tzinfo=UTC)) is True
+    assert w.contains(datetime(2026, 6, 1, 1, 0, tzinfo=UTC)) is False
+    assert w.contains(datetime(2026, 6, 1, 22, 0, tzinfo=UTC)) is True
+    assert w.contains(datetime(2026, 6, 2, 2, 0, tzinfo=UTC)) is True
     assert w.contains(datetime(2026, 6, 1, 12, 0, tzinfo=UTC)) is False
+
+
+def test_check_time_rechecks_expiry_after_guard_construction():
+    scope = _scope(authorized_until="2026-06-01T12:00:00Z")
+    guard = ScopeGuard(scope, now=datetime(2026, 6, 1, 11, 0, tzinfo=UTC))
+    assert guard.check_time(datetime(2026, 6, 1, 12, 0, tzinfo=UTC)) is True
+    assert guard.check_time(datetime(2026, 6, 1, 12, 0, 1, tzinfo=UTC)) is False
 
 
 def test_timewindow_bad_day():
@@ -243,6 +265,111 @@ def test_scope18_collectors_consult_guard(factory, fake_home: Path, tmp_path: Pa
     guard.check_path.return_value = True
     factory(fake_home, tmp_path, guard).collect()
     assert guard.check_provider.called
+
+
+def test_mcp_inventory_path_is_denied_before_read(tmp_path: Path, monkeypatch):
+    inventory = tmp_path / "secret_inventory.yaml"
+    guard = _guard(paths_denied=[inventory.as_posix()])
+
+    def forbidden_read(*args, **kwargs):
+        raise AssertionError("denied inventory was read")
+
+    monkeypatch.setattr(Path, "read_text", forbidden_read)
+    result = MCPCollector(inventory_path=inventory, guard=guard).collect()
+    assert result.nodes == [] and result.edges == []
+
+
+def test_local_mcp_config_is_denied_before_read(tmp_path: Path, monkeypatch):
+    home = tmp_path / "home"
+    config = home / ".config" / "Claude" / "claude_desktop_config.json"
+    config.parent.mkdir(parents=True)
+    config.write_text('{"mcpServers": {"github": {}}}')
+    collector = LocalCollector(
+        home=home,
+        hostname="host",
+        guard=_guard(paths_denied=[config.as_posix()]),
+    )
+    original_read = Path.read_text
+
+    def guarded_read(path, *args, **kwargs):
+        if path == config:
+            raise AssertionError("denied MCP config was read")
+        return original_read(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", guarded_read)
+    result = collector.collect()
+    assert not any(node.kind.value == "MCPServer" for node in result.nodes)
+
+
+def test_denied_agent_install_path_does_not_emit_agent(tmp_path: Path):
+    install = tmp_path / ".cursor"
+    install.mkdir()
+    result = LocalCollector(
+        home=tmp_path,
+        hostname="host",
+        guard=_guard(paths_denied=[install.as_posix()]),
+    ).collect()
+    assert not any(
+        node.properties.get("kind_detail") == "cursor" for node in result.nodes
+    )
+
+
+def test_mcp_nested_providers_are_independently_gated(tmp_path: Path):
+    inventory = tmp_path / "inventory.yaml"
+    inventory.write_text(
+        """servers:
+  - name: denied-backing
+    provider: mcp-platform
+    tools: [query]
+    backing_nhi: {provider: aws, identifier: prod-role}
+  - name: denied-resource
+    provider: mcp-platform
+    backing_nhi: {provider: gcp, identifier: svc}
+    accessible_resources:
+      - {provider: aws, kind: s3_bucket, identifier: prod-data}
+"""
+    )
+    result = MCPCollector(
+        inventory_path=inventory,
+        guard=_guard(providers_denied=["aws"]),
+    ).collect()
+
+    assert any(node.kind.value == "MCPServer" for node in result.nodes)
+    assert not any(node.properties.get("provider") == "aws" for node in result.nodes)
+
+
+@pytest.mark.parametrize(
+    ("collector_cls", "provider"),
+    [
+        (AWSIAMCollector, "aws"),
+        (GCPIAMCollector, "gcp"),
+        (AzureRBACCollector, "azure"),
+    ],
+)
+def test_cloud_provider_denial_happens_before_read(collector_cls, provider, tmp_path: Path):
+    missing = tmp_path / f"{provider}.json"
+    result = collector_cls(
+        missing,
+        guard=_guard(providers_denied=[provider]),
+    ).collect()
+    assert result.nodes == [] and result.edges == []
+
+
+@pytest.mark.parametrize(
+    ("collector_cls", "provider"),
+    [
+        (AWSIAMCollector, "aws"),
+        (GCPIAMCollector, "gcp"),
+        (AzureRBACCollector, "azure"),
+    ],
+)
+def test_cloud_path_denial_happens_before_read(collector_cls, provider, tmp_path: Path):
+    missing = tmp_path / f"{provider}.json"
+    result = collector_cls(
+        missing,
+        guard=_guard(paths_denied=[missing.as_posix()]),
+    ).collect()
+    assert result.nodes == [] and result.edges == []
 
 
 # --- CLI activation gates (SCOPE-04 / SCOPE-13 startup behavior) -------------
@@ -319,3 +446,17 @@ def test_audit10_skipped_entry_recorded_on_denied_provider(fake_home: Path, tmp_
     LocalCollector(home=fake_home, hostname="host", guard=guard, audit=audit).collect()
     entries = [json.loads(ln) for ln in audit_path.read_text().splitlines() if ln.strip()]
     assert any(e["decision"] == "SKIPPED" and "aws" in e["reason"] for e in entries)
+
+
+def test_allowed_scope_decisions_are_audited(fake_home: Path, tmp_path: Path):
+    from agenthound.audit import AuditLog
+
+    audit_path = tmp_path / "audit.jsonl"
+    LocalCollector(
+        home=fake_home,
+        hostname="host",
+        guard=_guard(),
+        audit=AuditLog(audit_path, "k"),
+    ).collect()
+    entries = [json.loads(line) for line in audit_path.read_text().splitlines()]
+    assert any(entry["decision"] == "ALLOW" for entry in entries)

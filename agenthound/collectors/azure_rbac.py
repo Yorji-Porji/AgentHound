@@ -1,7 +1,7 @@
 """Azure RBAC collector.
 
 Resolves *real* Azure permissions from an uploaded RBAC export — the Azure
-analogue of the ``aws-iam`` collector. You run read-only ``az`` commands yourself
+analogue of the ``aws`` collector. You run read-only ``az`` commands yourself
 and hand AgentHound the JSON, so the tool stays network-free and air-gappable.
 **AgentHound never calls Azure.**
 
@@ -143,6 +143,10 @@ class AzureRBACCollector(Collector):
 
     def collect(self) -> CollectionResult:
         result = CollectionResult()
+        if not self.allow_provider("azure", f"azure:{self.import_path}"):
+            return result
+        if not self.allow_path(self.import_path, f"azure:{self.import_path}"):
+            return result
         # JSONDecodeError / OSError propagate to the CLI, which turns them into a
         # clean ClickException (matching the fail-soft posture elsewhere).
         data = json.loads(self.import_path.read_text(encoding="utf-8"))
@@ -151,10 +155,6 @@ class AzureRBACCollector(Collector):
                 "export root must be a JSON array (a role-assignment list) or "
                 "object ({roleAssignments, roleDefinitions})"
             )
-
-        # One provider gate for the whole export: scoped-out 'azure' -> nothing.
-        if not self.allow_provider("azure", f"azure-rbac:{self.import_path}"):
-            return result
 
         assignments, definitions = _split_export(data)
         if not assignments:

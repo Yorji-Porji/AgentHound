@@ -20,6 +20,7 @@ Two rules are absolute and live in code, not in the per-call checks:
 
 from __future__ import annotations
 
+import os
 import re
 from datetime import UTC, datetime, time
 from pathlib import Path
@@ -78,6 +79,14 @@ def _glob_to_regex(pattern: str) -> re.Pattern[str]:
     return re.compile("".join(out))
 
 
+def _normalize_path(value: str | Path, *, resolve: bool) -> str:
+    """Normalize one path for matching without resolving glob patterns."""
+    raw = os.fspath(value)
+    if resolve:
+        raw = os.path.realpath(raw)
+    return os.path.normcase(raw).replace("\\", "/")
+
+
 # --- Models -------------------------------------------------------------------
 
 
@@ -118,14 +127,17 @@ class TimeWindow(BaseModel):
     def contains(self, now: datetime) -> bool:
         """Is ``now`` (any tz-aware instant) inside this window?"""
         local = now.astimezone(ZoneInfo(self.tz))
-        if local.weekday() not in {_DOW[d] for d in self.days}:
-            return False
+        allowed_days = {_DOW[d] for d in self.days}
         start, end = _parse_clock(self.start), _parse_clock(self.end)
         t = local.timetz().replace(tzinfo=None)
         if start <= end:
-            return start <= t <= end
+            return local.weekday() in allowed_days and start <= t <= end
         # Window wraps past midnight (e.g. 22:00–02:00).
-        return t >= start or t <= end
+        if t >= start:
+            return local.weekday() in allowed_days
+        if t <= end:
+            return (local.weekday() - 1) % 7 in allowed_days
+        return False
 
 
 def _parse_clock(value: str) -> time:
@@ -172,8 +184,12 @@ class ScopeGuard:
 
     def __init__(self, scope: EngagementScope, *, now: datetime | None = None) -> None:
         self.scope = scope
-        self._denied_globs = [_glob_to_regex(p) for p in scope.paths_denied]
+        self._denied_globs = [
+            _glob_to_regex(_normalize_path(p, resolve=False)) for p in scope.paths_denied
+        ]
         reference = now or datetime.now(UTC)
+        if reference.tzinfo is None:
+            reference = reference.replace(tzinfo=UTC)
         if scope.authorized_until < reference:
             raise ScopeExpired(
                 f"Engagement '{scope.engagement}' authorization expired at "
@@ -190,12 +206,21 @@ class ScopeGuard:
 
     def check_path(self, path: str | Path) -> bool:
         """Deny if the path matches any ``paths_denied`` glob."""
-        posix = Path(path).as_posix()
-        return not any(rx.match(posix) for rx in self._denied_globs)
+        lexical = _normalize_path(path, resolve=False)
+        resolved = _normalize_path(path, resolve=True)
+        return not any(
+            rx.match(candidate)
+            for rx in self._denied_globs
+            for candidate in {lexical, resolved}
+        )
 
     def check_time(self, now: datetime | None = None) -> bool:
-        """Allow when inside any window. No windows declared → always allowed."""
+        """Allow before expiry and, when declared, inside a recurring window."""
+        moment = now or datetime.now(UTC)
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=UTC)
+        if self.scope.authorized_until < moment:
+            return False
         if not self.scope.time_windows:
             return True
-        moment = now or datetime.now(UTC)
         return any(w.contains(moment) for w in self.scope.time_windows)

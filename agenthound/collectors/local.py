@@ -23,6 +23,7 @@ import json
 import os
 import platform
 import socket
+import urllib.parse
 from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -62,7 +63,14 @@ def _load_registry(path: Path | None = None) -> dict[str, dict[str, Any]]:
         return {}
     if not isinstance(data, dict):
         return {}
-    return data.get("servers") or {}
+    servers = data.get("servers") or {}
+    if not isinstance(servers, dict):
+        return {}
+    return {
+        name: cfg
+        for name, cfg in servers.items()
+        if isinstance(name, str) and isinstance(cfg, dict)
+    }
 
 
 # --- Agent install fingerprints -----------------------------------------------
@@ -180,7 +188,7 @@ def _aws_assume_roles(path: Path) -> list[dict[str, str]]:
     ``source_profile``, and ``mfa_serial``. These are
     identifiers and config (an ARN, an MFA *device* serial) — never a credential
     value. This is topology ("X can assume role Y"); what the role is allowed to
-    do needs IAM, not this file (see the ``aws-iam`` collector).
+    do needs IAM, not this file (see the ``aws`` collector).
     """
     sections: list[dict[str, str]] = []
     current: dict[str, str] | None = None
@@ -249,7 +257,7 @@ def _kube_contexts(path: Path) -> list[str]:
 
 
 def _npmrc_registries(path: Path) -> list[str]:
-    """Parse .npmrc for registry hosts. Auth tokens are not read."""
+    """Parse .npmrc for secret-free registry endpoints."""
     out: list[str] = []
     try:
         text = path.read_text()
@@ -257,9 +265,25 @@ def _npmrc_registries(path: Path) -> list[str]:
         return out
     for line in text.splitlines():
         line = line.strip()
-        if "registry=" in line and not line.startswith("#"):
-            _, _, url = line.partition("registry=")
-            out.append(url.strip())
+        if not line or line.startswith(("#", ";")) or "=" not in line:
+            continue
+        key, _, raw_url = line.partition("=")
+        if key.strip() != "registry" and not key.strip().endswith(":registry"):
+            continue
+        try:
+            parsed = urllib.parse.urlsplit(raw_url.strip())
+            scheme = parsed.scheme.lower()
+            hostname = parsed.hostname
+            port = parsed.port
+        except ValueError:
+            continue
+        if scheme not in {"http", "https"} or not hostname:
+            continue
+        host = hostname.lower()
+        if ":" in host:
+            host = f"[{host}]"
+        netloc = f"{host}:{port}" if port is not None else host
+        out.append(urllib.parse.urlunsplit((scheme, netloc, parsed.path, "", "")))
     return out
 
 
@@ -339,7 +363,9 @@ class LocalCollector(Collector):
         self.os_family = platform.system()
         self.username = getpass.getuser() if hostname is None else "unknown"
         self.registry = _load_registry()
-        if known_servers is not None:
+        if known_servers is not None and self.allow_path(
+            known_servers, f"known-servers:{known_servers}"
+        ):
             overlay = _load_registry(known_servers)
             self.registry = {**self.registry, **overlay}
 
@@ -369,7 +395,12 @@ class LocalCollector(Collector):
     ) -> dict[str, Node]:
         agents: dict[str, Node] = {}
         for kind_detail, candidates in _agent_install_paths(self.home).items():
-            install = _first_existing(candidates)
+            allowed = (
+                path
+                for path in candidates
+                if self.allow_path(path, f"agent-install:{kind_detail}")
+            )
+            install = _first_existing(allowed)
             if install is None:
                 continue
             agent = agent_node(
@@ -400,6 +431,8 @@ class LocalCollector(Collector):
         result: CollectionResult,
     ) -> None:
         for agent_kind, config_path in _mcp_config_paths(self.home):
+            if not self.allow_path(config_path, f"mcp-config:{agent_kind}"):
+                continue
             if not config_path.exists():
                 continue
             try:
@@ -425,10 +458,6 @@ class LocalCollector(Collector):
         runtime: Node,
         result: CollectionResult,
     ) -> None:
-        # Scope: a denied config path takes the whole server off the board.
-        if not self.allow_path(config_path, f"mcp:{server_name}"):
-            return
-
         # Classify against the registry. Unknown servers surface as warnings
         # so the user can extend the registry (or override via --known-servers).
         known = self.registry.get(server_name)
@@ -447,6 +476,27 @@ class LocalCollector(Collector):
             tools = known.get("tools", ["__unknown__"])
             classification = known.get("classification", ["unclassified"])
             provider = known.get("provider", "unknown")
+            if not isinstance(tools, list) or not all(
+                isinstance(tool, str) for tool in tools
+            ):
+                result.warnings.append(
+                    f"MCP registry entry '{server_name}' has invalid tools; using defaults."
+                )
+                tools = ["__unknown__"]
+            if not isinstance(classification, list) or not all(
+                isinstance(item, str) for item in classification
+            ):
+                result.warnings.append(
+                    f"MCP registry entry '{server_name}' has an invalid classification; "
+                    "using 'unclassified'."
+                )
+                classification = ["unclassified"]
+            if not isinstance(provider, str):
+                result.warnings.append(
+                    f"MCP registry entry '{server_name}' has an invalid provider; "
+                    "using 'unknown'."
+                )
+                provider = "unknown"
 
         # Scope: a denied provider produces no node and no edge for this server.
         if not self.allow_provider(provider, f"mcp:{server_name}"):
@@ -489,16 +539,22 @@ class LocalCollector(Collector):
         # (aws, github, stripe, ...) is mapped, not left as a blank "unknown".
         if isinstance(server_cfg, dict):
             env = server_cfg.get("env") or {}
-            if env:
+            if env and not isinstance(env, dict):
+                result.warnings.append(
+                    f"MCP server '{server_name}' has a non-mapping 'env'; ignoring it."
+                )
+                env = {}
+            env_keys = [key for key in env if isinstance(key, str)]
+            if env_keys:
                 result.edges.append(
                     Edge(
                         PermissionEdgeKind.CAN_READ_CRED,
                         runtime.objectid,
                         nhi.objectid,
-                        properties={"via": "mcp_env", "env_keys": sorted(env.keys())},
+                        properties={"via": "mcp_env", "env_keys": sorted(env_keys)},
                     )
                 )
-                for cred_provider, keys in _providers_from_env(env.keys()).items():
+                for cred_provider, keys in _providers_from_env(env_keys).items():
                     if cred_provider == provider:
                         continue  # already the server's own identity
                     if not self.allow_provider(cred_provider, f"mcp:{server_name}:{cred_provider}"):
@@ -567,7 +623,7 @@ class LocalCollector(Collector):
         # may assume (role_arn + source_profile) — non-secret config. Emit the
         # role as its own NHI and a CAN_ASSUME edge from the source profile's NHI
         # (same objectid as the profile NHI above, so they join into one node).
-        # Topology only; what the role can *do* needs IAM (see the aws-iam collector).
+        # Topology only; what the role can *do* needs IAM (see the aws collector).
         aws_config = self.home / ".aws" / "config"
         if self._cred_allowed("aws", aws_config):
             for entry in _aws_assume_roles(aws_config):

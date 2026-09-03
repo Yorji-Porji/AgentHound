@@ -4,7 +4,7 @@
 #
 #     export AGENTHOUND_AUDIT_KEY="a-per-engagement-secret"
 #     agenthound local --scope agenthound.scope.yaml -o local.json
-#     agenthound verify-audit engagement-audit.jsonl
+#     agenthound va engagement-audit.jsonl
 #
 # Enforcement rules:
 #   - authorized_until is a hard stop: once it passes, the tool refuses to run.
@@ -42,5 +42,5 @@ time_windows:
     end: "18:00"
     tz: America/New_York
 
-# Append-only, HMAC-chained audit trail. Verify later with `agenthound verify-audit`.
+# Append-only, HMAC-chained audit trail. Verify later with `agenthound va`.
 audit_log: engagement-audit.jsonl

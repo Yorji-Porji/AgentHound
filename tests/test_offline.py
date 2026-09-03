@@ -7,15 +7,17 @@ non-tar input), temp-dir cleanup, parity with a live `local` scan, and the
 
 from __future__ import annotations
 
+import io
 import tarfile
 from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
 
+from agenthound import offline
 from agenthound.cli import main
 from agenthound.collectors.local import LocalCollector
-from agenthound.offline import UnsafeArchiveError, extracted_home
+from agenthound.offline import UnsafeArchiveError, _assert_safe, extracted_home
 
 
 def _make_home_tarball(tmp_path: Path) -> Path:
@@ -128,3 +130,73 @@ def test_offline_cli_rejects_non_tar(tmp_path: Path):
     res = CliRunner().invoke(main, ["offline", str(bogus)])
     assert res.exit_code != 0
     assert "Could not analyze archive" in res.output
+
+
+def _write_tar(path: Path, members: list[tuple[str, bytes]]) -> None:
+    with tarfile.open(path, "w") as tar:
+        for name, payload in members:
+            info = tarfile.TarInfo(name)
+            info.size = len(payload)
+            tar.addfile(info, io.BytesIO(payload))
+
+
+def test_offline_rejects_member_count_limit(tmp_path: Path, monkeypatch):
+    archive = tmp_path / "many.tar"
+    _write_tar(archive, [("one", b"1"), ("two", b"2")])
+    monkeypatch.setattr(offline, "MAX_ARCHIVE_MEMBERS", 1)
+    with pytest.raises(UnsafeArchiveError, match="member limit"), extracted_home(archive):
+        pass
+
+
+def test_offline_rejects_total_size_limit(tmp_path: Path, monkeypatch):
+    archive = tmp_path / "large-total.tar"
+    _write_tar(archive, [("one", b"12"), ("two", b"34")])
+    monkeypatch.setattr(offline, "MAX_ARCHIVE_TOTAL_SIZE", 3)
+    with pytest.raises(UnsafeArchiveError, match="expanded-data limit"), extracted_home(archive):
+        pass
+
+
+def test_offline_rejects_single_member_limit(tmp_path: Path, monkeypatch):
+    archive = tmp_path / "large-member.tar"
+    _write_tar(archive, [("one", b"1234")])
+    monkeypatch.setattr(offline, "MAX_ARCHIVE_MEMBER_SIZE", 3)
+    with pytest.raises(UnsafeArchiveError, match="member exceeds"), extracted_home(archive):
+        pass
+
+
+def test_offline_preserves_safe_internal_link_validation(tmp_path: Path):
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    symlink = tarfile.TarInfo("links/current")
+    symlink.type = tarfile.SYMTYPE
+    symlink.linkname = "../targets/value"
+    hardlink = tarfile.TarInfo("links/copy")
+    hardlink.type = tarfile.LNKTYPE
+    hardlink.linkname = "targets/value"
+    _assert_safe(symlink, dest)
+    _assert_safe(hardlink, dest)
+
+
+def test_offline_rejects_special_member_types(tmp_path: Path):
+    archive = tmp_path / "fifo.tar"
+    info = tarfile.TarInfo("pipe")
+    info.type = tarfile.FIFOTYPE
+    with tarfile.open(archive, "w") as tar:
+        tar.addfile(info)
+    with pytest.raises(UnsafeArchiveError, match="unsupported"), extracted_home(archive):
+        pass
+
+
+def test_offline_cli_scope_denies_archive_before_extraction(tmp_path: Path):
+    archive = tmp_path / "capture.tar"
+    _write_tar(archive, [(".npmrc", b"registry=https://registry.npmjs.org")])
+    scope = tmp_path / "scope.yaml"
+    scope.write_text(
+        "engagement: test\n"
+        'authorized_until: "2099-01-01T00:00:00Z"\n'
+        "paths_denied:\n"
+        f"  - '{archive.as_posix()}'\n"
+    )
+    result = CliRunner().invoke(main, ["offline", str(archive), "--scope", str(scope)])
+    assert result.exit_code != 0
+    assert "out of scope" in result.output

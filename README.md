@@ -78,17 +78,17 @@ The existing MCP security tool ecosystem (Snyk agent-scan, Invariant mcp-scan, C
 
 ## What it does
 
-A four-stage pipeline: **collect** (`local` / `offline` / `mcp` / `aws-iam` / `gcp-iam` / `azure-rbac`), then **infer** coercion edges, then **emit** BloodHound JSON. Plus scope enforcement and a tamper-evident audit log for authorized engagements.
+A four-stage pipeline: **collect** (`local` / `offline` / `mcp` / `aws` / `gcp` / `azure`), then **infer** coercion edges, then **emit** BloodHound JSON. Plus scope enforcement and a tamper-evident audit log for authorized engagements.
 
 - **`agenthound local`**: scans the current machine for installed AI assistants, their configured MCP servers, and reachable credentials. Produces an inventory of agent nodes, runtime nodes, and the credentials each agent's runtime can pick up from environment variables, profile files, and config dirs.
-- **`agenthound offline`**: analyze an *offline host* (one you're not on) from a captured `.tar.gz` of its config/credential paths, rather than scanning a live machine. "Offline" refers to the target, not the tool; AgentHound is network-free either way. This is the "capture cheap on the engagement host, analyze in a clean room" workflow. Produces the same graph as `local`; untrusted archives are extracted defensively (no path traversal or escaping links).
+- **`agenthound offline`**: analyze an *offline host* (one you're not on) from a captured `.tar.gz` of its config/credential paths, rather than scanning a live machine. "Offline" refers to the target, not the tool; AgentHound is network-free either way. This is the "capture cheap on the engagement host, analyze in a clean room" workflow. Produces the same graph as `local`; untrusted archives are extracted defensively (no path traversal or escaping links, at most 10,000 members, 1 GiB expanded data, and 256 MiB per file).
 - **`agenthound mcp`**: parses a curated MCP server inventory file (YAML or JSON) and emits its nodes and edges. Useful for modeling documented fleets without touching each developer's machine.
-- **`agenthound aws-iam`**: resolves *real* AWS permissions from an uploaded `aws iam get-account-authorization-details` export. Emits each identity, the resources its policies grant (`GRANTS_ACCESS`), an evidence-based admin flag (from the `AdministratorAccess` policy or an `Allow *` on `*`, never the role's name), and `CAN_ASSUME` edges from role trust policies. **You** run the read-only AWS command and hand AgentHound the file; the tool never calls AWS, so it stays network-free.
-- **`agenthound gcp-iam`**: the GCP analogue. Resolves *real* GCP permissions from an uploaded `gcloud asset search-all-iam-policies` export. Emits each binding member as an NHI, the resources its bindings grant (`GRANTS_ACCESS`), an evidence-based admin flag (`roles/owner`, GCP's own basic role, never a custom-role name), and `CAN_ASSUME` edges for **service-account impersonation** (`serviceAccountTokenCreator` / `serviceAccountUser` / `workloadIdentityUser` on an SA). Upload-only; the tool never calls GCP.
-- **`agenthound azure-rbac`**: the Azure analogue. Resolves *real* Azure permissions from an uploaded RBAC export (`az role assignment list` plus, recommended, `az role definition list`). Emits each principal as an NHI, the scopes its assignments grant (`GRANTS_ACCESS`), and an evidence-based admin flag (action `*` with no `notActions`, the built-in Owner role, never a role name). Upload-only; the tool never calls Azure.
+- **`agenthound aws`**: resolves *real* AWS permissions from an uploaded `aws iam get-account-authorization-details` export. Emits each identity, the resources its policies grant (`GRANTS_ACCESS`), an evidence-based admin flag (from the `AdministratorAccess` policy or an `Allow *` on `*`, never the role's name), and `CAN_ASSUME` edges from role trust policies. **You** run the read-only AWS command and hand AgentHound the file; the tool never calls AWS, so it stays network-free.
+- **`agenthound gcp`**: the GCP analogue. Resolves *real* GCP permissions from an uploaded `gcloud asset search-all-iam-policies` export. Emits each binding member as an NHI, the resources its bindings grant (`GRANTS_ACCESS`), an evidence-based admin flag (`roles/owner`, GCP's own basic role, never a custom-role name), and `CAN_ASSUME` edges for **service-account impersonation** (`serviceAccountTokenCreator` / `serviceAccountUser` / `workloadIdentityUser` on an SA). Upload-only; the tool never calls GCP.
+- **`agenthound azure`**: the Azure analogue. Resolves *real* Azure permissions from an uploaded RBAC export (`az role assignment list` plus, recommended, `az role definition list`). Emits each principal as an NHI, the scopes its assignments grant (`GRANTS_ACCESS`), and an evidence-based admin flag (action `*` with no `notActions`, the built-in Owner role, never a role name). Upload-only; the tool never calls Azure.
 - **`agenthound infer`**: runs the coercion inference pass over collected nodes, emitting `COERCES` edges from injectable input sources through agents into the tools and identities they can reach.
 - **`agenthound emit`**: produces a BloodHound OpenGraph JSON payload ready for ingestion into BloodHound CE.
-- **`agenthound verify-audit`**: re-walks the HMAC hash-chain of an audit log written during a scoped run and reports the first line that was edited, deleted, or reordered.
+- **`agenthound va`**: re-walks the HMAC hash-chain of an audit log written during a scoped run and reports the first line that was edited, inserted, internally deleted, or reordered. The descriptive `agenthound verify-audit` form remains available as a hidden compatibility alias.
 
 ## Node and edge taxonomy
 
@@ -208,9 +208,9 @@ agenthound mcp -i examples/mcp_inventory.yaml -o mcp.json
 #   aws iam get-account-authorization-details > iam.json
 #   gcloud asset search-all-iam-policies --scope=organizations/ORG_ID --format=json > gcp_iam.json
 #   az role assignment list --all -o json   # combine with `az role definition list -o json`
-agenthound aws-iam     -i iam.json      -o aws.json
-agenthound gcp-iam     -i gcp_iam.json  -o gcp.json
-agenthound azure-rbac  -i azure.json    -o azure.json
+agenthound aws    -i iam.json      -o aws.json
+agenthound gcp    -i gcp_iam.json  -o gcp.json
+agenthound azure  -i azure.json    -o azure.json
 
 # Run coercion inference over collected data.
 agenthound infer local.json mcp.json aws.json gcp.json azure.json -o graph.json
@@ -256,12 +256,14 @@ tamper-evident, hash-chained audit log of every decision:
 ```bash
 export AGENTHOUND_AUDIT_KEY="your-engagement-key"   # required when the scope sets audit_log
 agenthound local --scope scope.yaml -o local.json
-agenthound verify-audit audit.jsonl                  # the audit_log path named in your scope
+agenthound va audit.jsonl                            # the audit_log path named in your scope
 ```
 
 The scope file declares the engagement name, authorization expiry, allowed/denied providers and
 paths, time windows, and the audit-log path. A denied provider produces **no node and no edge**.
 The data is never collected. See [docs/AUTHORIZED-USE.md](docs/AUTHORIZED-USE.md) for the full model.
+Verification authenticates the sequence that is present, but without an independently retained
+terminal hash it cannot detect removal of a valid suffix (including truncation to an empty log).
 
 ## Extending the MCP server registry
 
@@ -276,7 +278,7 @@ The overlay file uses the same schema as the bundled registry. Entries in the ov
 ## What's not yet implemented
 
 - **Live MCP introspection over the wire.** Currently classifies from the configured server name against the registry. The next milestone connects via stdio/SSE to enumerate the actual tool surface live, the way Snyk agent-scan does.
-- **Cloud-side NHI permission expansion.** `aws-iam`, `gcp-iam`, and `azure-rbac` resolve real permissions from uploaded exports across all three major clouds today, all keeping `NHI → GRANTS_ACCESS → Resource` as the shape. Still to come: **live** API pulls (vs. upload-only), the Azure managed-identity-attachment `CAN_ASSUME` edge, and effective-permission resolution (after deny policies / boundaries / org constraints).
+- **Cloud-side NHI permission expansion.** `aws`, `gcp`, and `azure` resolve real permissions from uploaded exports across all three major clouds today, all keeping `NHI → GRANTS_ACCESS → Resource` as the shape. Still to come: **live** API pulls (vs. upload-only), the Azure managed-identity-attachment `CAN_ASSUME` edge, and effective-permission resolution (after deny policies / boundaries / org constraints).
 - **Path scoring.** Every path currently treated as binary. Reachability scoring (production tier, mutable-tag refs, indirect-injection sources) is the next analytic layer.
 
 Progress is tracked in [GitHub Issues](https://github.com/Yorji-Porji/AgentHound/issues).

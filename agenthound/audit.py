@@ -2,8 +2,9 @@
 
 Every decision a run makes — what it touched, what it skipped, and why — is
 appended as one JSON object per line. Each line is HMAC-signed with a
-per-engagement key and chained to the previous line's hash, so any edit,
-deletion, or reordering breaks verification.
+per-engagement key and chained to the previous line's hash, so edits,
+insertion, interior deletion, and reordering break verification. A valid suffix
+removal needs an independently retained terminal hash to detect.
 
 Line shape::
 
@@ -68,6 +69,34 @@ def _coerce_key(key: str | bytes) -> bytes:
     return key if isinstance(key, bytes) else key.encode("utf-8")
 
 
+def _verify_lines(
+    lines: list[str], key: bytes
+) -> tuple[bool, int | None, str, str]:
+    """Verify JSONL text and return the final trusted hash as well."""
+    prev = GENESIS_HASH
+    for idx, raw in enumerate(lines):
+        try:
+            entry = json.loads(raw)
+        except json.JSONDecodeError:
+            return False, idx, "line is not valid JSON", prev
+        if not isinstance(entry, dict):
+            return False, idx, "line must be a JSON object", prev
+        if "hash" not in entry:
+            return False, idx, "line is missing its hash", prev
+        if set(entry) != _EXPECTED_LINE_KEYS:
+            return False, idx, "line carries fields not covered by the signature", prev
+        if not all(isinstance(entry[field], str) for field in _EXPECTED_LINE_KEYS):
+            return False, idx, "line fields must all be strings", prev
+        stored = entry["hash"]
+        body = {k: entry[k] for k in _BODY_FIELDS}
+        if entry["prev_hash"] != prev:
+            return False, idx, "chain broken: prev_hash does not match the prior line", prev
+        if _sign(key, body) != stored:
+            return False, idx, "hash mismatch: line was altered or signed with another key", prev
+        prev = stored
+    return True, None, "audit chain verified", prev
+
+
 class AuditLog:
     """Append-only, HMAC-chained JSONL writer."""
 
@@ -77,22 +106,23 @@ class AuditLog:
         self._prev_hash = self._last_hash()
 
     def _last_hash(self) -> str:
-        """Resume the chain from an existing log, or start at genesis."""
+        """Verify and resume an existing chain, or start at genesis."""
         if not self.path.exists():
             return GENESIS_HASH
-        last = GENESIS_HASH
-        for line in self.path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                last = json.loads(line)["hash"]
-            except (json.JSONDecodeError, KeyError) as exc:
-                raise AuditError(
-                    f"Existing audit log {self.path} is corrupt; cannot resume the "
-                    f"chain. Verify it with `agenthound verify-audit` and archive it "
-                    f"before starting a new run."
-                ) from exc
+        try:
+            lines = [
+                line
+                for line in self.path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+        except OSError as exc:
+            raise AuditError(f"Could not read existing audit log {self.path}: {exc}") from exc
+        ok, idx, message, last = _verify_lines(lines, self.key)
+        if not ok:
+            raise AuditError(
+                f"Existing audit log {self.path} failed verification at line {idx}: "
+                f"{message}; refusing to resume."
+            )
         return last
 
     def record(self, op: str, target: str, decision: str, reason: str) -> dict:
@@ -120,22 +150,6 @@ def verify_audit_log(path: str | Path, key: str | bytes) -> tuple[bool, int | No
     intact.
     """
     key_bytes = _coerce_key(key)
-    prev = GENESIS_HASH
     lines = [ln for ln in Path(path).read_text(encoding="utf-8").splitlines() if ln.strip()]
-    for idx, raw in enumerate(lines):
-        try:
-            entry = json.loads(raw)
-        except json.JSONDecodeError:
-            return False, idx, "line is not valid JSON"
-        if "hash" not in entry:
-            return False, idx, "line is missing its hash"
-        if set(entry) != _EXPECTED_LINE_KEYS:
-            return False, idx, "line carries fields not covered by the signature"
-        stored = entry["hash"]
-        body = {k: entry[k] for k in _BODY_FIELDS if k in entry}
-        if entry.get("prev_hash") != prev:
-            return False, idx, "chain broken: prev_hash does not match the prior line"
-        if _sign(key_bytes, body) != stored:
-            return False, idx, "hash mismatch: line was altered or signed with another key"
-        prev = stored
-    return True, None, "audit chain verified"
+    ok, idx, message, _ = _verify_lines(lines, key_bytes)
+    return ok, idx, message

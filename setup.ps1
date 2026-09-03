@@ -26,7 +26,9 @@
     Install dev extras but skip running pytest at the end.
 
 .PARAMETER Recreate
-    Delete and rebuild the virtual environment from scratch.
+    Delete and rebuild the virtual environment from scratch. Existing targets
+    must be real directories with a pyvenv.cfg marker; roots, links, and the
+    repository directory are refused.
 
 .EXAMPLE
     .\setup.ps1
@@ -66,6 +68,40 @@ function Write-Step($msg)  { Write-Host "==> $msg" -ForegroundColor Cyan }
 function Write-Ok($msg)    { Write-Host "  OK  $msg" -ForegroundColor Green }
 function Write-Warn2($msg) { Write-Host "  !   $msg" -ForegroundColor Yellow }
 function Fail($msg)        { Write-Host "ERROR: $msg" -ForegroundColor Red; exit 1 }
+
+function Get-SafeRecreateTarget([string] $Path) {
+    $full = [System.IO.Path]::GetFullPath($Path)
+    if (-not (Test-Path -LiteralPath $full)) { return $full }
+
+    $item = Get-Item -LiteralPath $full -Force
+    if (-not $item.PSIsContainer) {
+        Fail "Refusing -Recreate: '$full' is not a directory."
+    }
+    if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+        Fail "Refusing -Recreate: '$full' is a link or reparse point."
+    }
+
+    $trimmed = $full.TrimEnd([System.IO.Path]::DirectorySeparatorChar,
+                            [System.IO.Path]::AltDirectorySeparatorChar)
+    $root = ([System.IO.Path]::GetPathRoot($full)).TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar,
+        [System.IO.Path]::AltDirectorySeparatorChar
+    )
+    $repo = ([System.IO.Path]::GetFullPath($ScriptRoot)).TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar,
+        [System.IO.Path]::AltDirectorySeparatorChar
+    )
+    if ([System.StringComparer]::OrdinalIgnoreCase.Equals($trimmed, $root)) {
+        Fail "Refusing -Recreate: '$full' is a filesystem root."
+    }
+    if ([System.StringComparer]::OrdinalIgnoreCase.Equals($trimmed, $repo)) {
+        Fail "Refusing -Recreate: '$full' is the repository root."
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $full "pyvenv.cfg") -PathType Leaf)) {
+        Fail "Refusing -Recreate: '$full' is not a Python virtual environment (pyvenv.cfg missing)."
+    }
+    return $full
+}
 
 # --- Constants ----------------------------------------------------------------
 
@@ -139,9 +175,12 @@ Write-Ok "Using Python $pythonVersion ($python $pythonArgsStr)"
 
 # --- 2. Create (or reuse) the virtual environment -----------------------------
 
-if ($Recreate -and (Test-Path $VenvPath)) {
+$VenvPath = [System.IO.Path]::GetFullPath($VenvPath)
+
+if ($Recreate -and (Test-Path -LiteralPath $VenvPath)) {
+    $VenvPath = Get-SafeRecreateTarget $VenvPath
     Write-Step "Removing existing virtual environment (-Recreate)"
-    Remove-Item -Recurse -Force $VenvPath
+    Remove-Item -LiteralPath $VenvPath -Recurse -Force
 }
 
 $venvPython = Join-Path $VenvPath "Scripts\python.exe"

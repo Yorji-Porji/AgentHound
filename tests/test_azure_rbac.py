@@ -1,6 +1,6 @@
 """Azure RBAC resolver (real permissions, upload-only).
 
-The ``azure-rbac`` collector ingests an Azure RBAC export (role assignments, and
+The ``azure`` collector ingests an Azure RBAC export (role assignments, and
 optionally role definitions — files the operator uploads; AgentHound never calls
 Azure) and emits principals as NHIs, the scopes their assignments grant, and an
 evidence-based admin flag (action ``*`` with no ``notActions`` = the built-in
@@ -219,7 +219,7 @@ def test_scope_deny_azure_yields_nothing():
 def test_malformed_export_raises_clickexception(tmp_path: Path):
     bad = tmp_path / "bad.json"
     bad.write_text("{ not valid json")
-    res = CliRunner().invoke(main, ["azure-rbac", "-i", str(bad)])
+    res = CliRunner().invoke(main, ["azure", "-i", str(bad)])
     assert res.exit_code != 0
     assert "Could not read Azure RBAC export" in res.output
 
@@ -227,14 +227,14 @@ def test_malformed_export_raises_clickexception(tmp_path: Path):
 def test_non_container_root_raises_clickexception(tmp_path: Path):
     bad = tmp_path / "scalar.json"
     bad.write_text("\"just a string\"")
-    res = CliRunner().invoke(main, ["azure-rbac", "-i", str(bad)])
+    res = CliRunner().invoke(main, ["azure", "-i", str(bad)])
     assert res.exit_code != 0
     assert "Could not read Azure RBAC export" in res.output
 
 
 def test_cli_writes_graph(tmp_path: Path):
     out = tmp_path / "azure_graph.json"
-    res = CliRunner().invoke(main, ["azure-rbac", "-i", str(EXAMPLE), "-o", str(out)])
+    res = CliRunner().invoke(main, ["azure", "-i", str(EXAMPLE), "-o", str(out)])
     assert res.exit_code == 0, res.output
     payload = json.loads(out.read_text())
     assert payload["graph"]["nodes"] and payload["graph"]["edges"]

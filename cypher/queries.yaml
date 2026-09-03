@@ -111,7 +111,7 @@ queries:
       assume-role wiring (role_arn plus source_profile) in a developer's
       ~/.aws/config; chained together they reveal an identity that can reach far
       more powerful roles than it holds directly, often across accounts. Topology
-      only: what each role can actually do comes from the aws-iam collector's
+      only: what each role can actually do comes from the aws collector's
       GrantsAccess edges. Note `start` is reserved in BloodHound CE, so the start
       node is named `src`.
     risk_category: critical
@@ -125,7 +125,7 @@ queries:
   - id: gcp_service_account_impersonation_escalation
     title: GCP privilege escalation via service-account impersonation
     description: >
-      Walks the CanAssume graph the gcp-iam collector draws from impersonation
+      Walks the CanAssume graph the gcp collector draws from impersonation
       bindings (serviceAccountTokenCreator / serviceAccountUser /
       workloadIdentityUser on a service account). Each hop is one identity that
       can mint tokens for, that is act as, a service account; chained together
@@ -143,7 +143,7 @@ queries:
   - id: injection_to_full_access_identity
     title: Injection paths reaching an admin / full-access cloud identity
     description: >
-      The aws-iam, gcp-iam, and azure-rbac collectors all flag identities whose
+      The aws, gcp, and azure collectors all flag identities whose
       policies grant unrestricted access (grants_full_access: an AWS Allow *:* or
       AdministratorAccess, GCP roles/owner, or Azure Owner). This finds
       untrusted-content sources that can coerce an agent into a tool backed by
