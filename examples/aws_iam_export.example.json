@@ -1,5 +1,5 @@
 {
-  "_comment": "Tiny sample of `aws iam get-account-authorization-details` output. Run that read-only command yourself and feed the real file to `agenthound aws-iam --import <file>`. AgentHound never calls AWS. Note: the `OrgAdmin` role is flagged admin because it carries the AdministratorAccess policy, and the blandly-named `ci-deployer` user is flagged admin because of an inline Action:* Resource:* statement — admin comes from policy evidence, not the name.",
+  "_comment": "Tiny sample of `aws iam get-account-authorization-details` output. Run that read-only command yourself and feed the real file to `agenthound aws --import <file>`. AgentHound never calls AWS. Note: the `OrgAdmin` role is flagged admin because it carries the AdministratorAccess policy, and the blandly-named `ci-deployer` user is flagged admin because of an inline Action:* Resource:* statement — admin comes from policy evidence, not the name.",
   "UserDetailList": [
     {
       "UserName": "ci-deployer",

@@ -1,7 +1,7 @@
 """GCP IAM policy collector.
 
 Resolves *real* GCP permissions from an uploaded Cloud Asset Inventory IAM-policy
-export — the GCP analogue of the ``aws-iam`` collector. You run a read-only
+export — the GCP analogue of the ``aws`` collector. You run a read-only
 command yourself and hand AgentHound the JSON, so the tool stays network-free
 and air-gappable. **AgentHound never calls GCP.**
 
@@ -173,6 +173,10 @@ class GCPIAMCollector(Collector):
 
     def collect(self) -> CollectionResult:
         result = CollectionResult()
+        if not self.allow_provider("gcp", f"gcp:{self.import_path}"):
+            return result
+        if not self.allow_path(self.import_path, f"gcp:{self.import_path}"):
+            return result
         # JSONDecodeError / OSError propagate to the CLI, which turns them into a
         # clean ClickException (matching the fail-soft posture elsewhere).
         data = json.loads(self.import_path.read_text(encoding="utf-8"))
@@ -181,10 +185,6 @@ class GCPIAMCollector(Collector):
                 "export root must be a JSON array (from `gcloud asset "
                 "search-all-iam-policies`) or object (a get-iam-policy document)"
             )
-
-        # One provider gate for the whole export: scoped-out 'gcp' -> nothing.
-        if not self.allow_provider("gcp", f"gcp-iam:{self.import_path}"):
-            return result
 
         # Aggregate per member across every binding, so each identity is one node
         # carrying the union of its grants (mirrors the AWS per-principal node).

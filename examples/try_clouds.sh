@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Self-contained smoke test for AgentHound's three cloud collectors:
-#   agenthound aws-iam     (AWS  — IAM authorization-details export)
-#   agenthound gcp-iam     (GCP  — Cloud Asset Inventory IAM-policy export)
-#   agenthound azure-rbac  (Azure — RBAC role assignments + definitions)
+#   agenthound aws    (AWS  — IAM authorization-details export)
+#   agenthound gcp    (GCP  — Cloud Asset Inventory IAM-policy export)
+#   agenthound azure  (Azure — RBAC role assignments + definitions)
 #
 # It runs each collector against the BUNDLED example exports (so it works on a
 # fresh box with NO cloud accounts and NO network), chains infer -> emit into one
@@ -78,12 +78,12 @@ counts() {  # prints "<nodes> <edges>" for an emitted payload (CR-stripped for G
 
 # --- [1/5] each collector produces a graph -----------------------------------
 echo "==> [1/5] running the three cloud collectors against the bundled examples"
-AH aws-iam    -i "$AWS_EXPORT"   -o "$WORK/aws.json"   >/dev/null
-AH gcp-iam    -i "$GCP_EXPORT"   -o "$WORK/gcp.json"   >/dev/null
-AH azure-rbac -i "$AZURE_EXPORT" -o "$WORK/azure.json" >/dev/null
+AH aws   -i "$AWS_EXPORT"   -o "$WORK/aws.json"   >/dev/null
+AH gcp   -i "$GCP_EXPORT"   -o "$WORK/gcp.json"   >/dev/null
+AH azure -i "$AZURE_EXPORT" -o "$WORK/azure.json" >/dev/null
 for cloud in aws gcp azure; do
   read -r N E < <(counts "$WORK/$cloud.json")
-  if [[ "$N" -gt 0 && "$E" -gt 0 ]]; then ok "$cloud-iam: $N nodes, $E edges"
+  if [[ "$N" -gt 0 && "$E" -gt 0 ]]; then ok "$cloud: $N nodes, $E edges"
   else bad "$cloud collector produced an empty graph"; fi
 done
 
@@ -181,7 +181,7 @@ engagement: cloud-smoke-test
 authorized_until: "2099-01-01T00:00:00Z"
 providers_denied: [gcp]
 EOF
-AH gcp-iam -i "$GCP_EXPORT" --scope "$WORK/deny.yaml" -o "$WORK/denied.json" >/dev/null
+AH gcp -i "$GCP_EXPORT" --scope "$WORK/deny.yaml" -o "$WORK/denied.json" >/dev/null
 read -r DN DE < <(counts "$WORK/denied.json")
 if [[ "$DN" -eq 0 && "$DE" -eq 0 ]]; then ok "scoped-out 'gcp' produced 0 nodes, 0 edges"
 else bad "denied provider still produced $DN nodes / $DE edges"; fi

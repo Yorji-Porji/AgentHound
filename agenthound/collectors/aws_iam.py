@@ -12,7 +12,7 @@ Emitted subgraph (all under the ``aws`` scope gate):
   ``assumed_role`` NHI the ``local`` collector draws from ``~/.aws/config`` (the
   local-config view and the authoritative IAM view attach to the same node).
   Note this join is at the **role** level (both key roles by ARN); the *assuming*
-  identity does not join — ``local`` keys it by profile name and ``aws-iam`` by
+  identity does not join — ``local`` keys it by profile name and ``aws`` by
   ARN, and resolving one to the other needs an API call this tool never makes.
 - **evidence-based admin flag**: ``grants_full_access`` is set from policy
   *content* — the managed ``AdministratorAccess`` ARN, or an ``Allow`` of action
@@ -106,6 +106,10 @@ class AWSIAMCollector(Collector):
 
     def collect(self) -> CollectionResult:
         result = CollectionResult()
+        if not self.allow_provider("aws", f"aws:{self.import_path}"):
+            return result
+        if not self.allow_path(self.import_path, f"aws:{self.import_path}"):
+            return result
         # JSONDecodeError / OSError propagate to the CLI, which turns them into a
         # clean ClickException (matching the fail-soft posture elsewhere).
         data = json.loads(self.import_path.read_text(encoding="utf-8"))
@@ -114,10 +118,6 @@ class AWSIAMCollector(Collector):
                 "export root must be a JSON object "
                 "(from `aws iam get-account-authorization-details`)"
             )
-
-        # One provider gate for the whole export: scoped-out 'aws' -> nothing.
-        if not self.allow_provider("aws", f"aws-iam:{self.import_path}"):
-            return result
 
         managed = _index_managed_policies(as_list(data.get("Policies")))
         roles = [r for r in as_list(data.get("RoleDetailList")) if isinstance(r, dict)]

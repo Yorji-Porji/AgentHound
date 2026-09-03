@@ -1,6 +1,6 @@
 [
   {
-    "_comment": "FAKE but production-SHAPED `gcloud asset search-all-iam-policies --format=json` for Acme Robotics' GCP org (acmerobotics.io). Identity/permission METADATA only — no credential values. Feed to `agenthound gcp-iam -i examples/acme-corp/gcp_iam.json`. Planted findings: terraform-deployer SA is roles/owner on acme-prod (over-privileged CI); the dev-platform group AND the GitHub Actions workload-identity principal can both impersonate terraform-deployer (serviceAccountTokenCreator / workloadIdentityUser) — a CanAssume escalation that lands on an owner SA. See README.md for the fake->real replace table.",
+    "_comment": "FAKE but production-SHAPED `gcloud asset search-all-iam-policies --format=json` for Acme Robotics' GCP org (acmerobotics.io). Identity/permission METADATA only — no credential values. Feed to `agenthound gcp -i examples/acme-corp/gcp_iam.json`. Planted findings: terraform-deployer SA is roles/owner on acme-prod (over-privileged CI); the dev-platform group AND the GitHub Actions workload-identity principal can both impersonate terraform-deployer (serviceAccountTokenCreator / workloadIdentityUser) — a CanAssume escalation that lands on an owner SA. See README.md for the fake->real replace table.",
     "resource": "//cloudresourcemanager.googleapis.com/projects/acme-prod",
     "project": "projects/acme-prod",
     "policy": {

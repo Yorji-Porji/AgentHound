@@ -191,3 +191,30 @@ def test_no_credential_values_emitted(synthetic_home: Path) -> None:
             sval = str(value).lower()
             for forbidden in ("aws_secret", "private_key", "bearer ", "ghp_", "sk-"):
                 assert forbidden not in sval, f"Node {n.name}.{key} leaks {forbidden!r}"
+
+
+def test_npm_registry_userinfo_is_never_emitted(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    secret = "SUPERSECRET_TOKEN"
+    (home / ".npmrc").write_text(
+        f"registry=https://ci-bot:{secret}@npm.corp.internal/artifactory/api/npm/team"
+        "?access_token=also-secret#fragment\n"
+        "@engineering:registry=https://user:password@packages.example:8443/npm/team/\n"
+    )
+
+    result = LocalCollector(home=home, hostname="test-host").collect()
+    npm_ids = {
+        n.properties.get("identifier")
+        for n in result.nodes
+        if n.properties.get("provider") == "npm"
+    }
+
+    assert npm_ids == {
+        "https://npm.corp.internal/artifactory/api/npm/team",
+        "https://packages.example:8443/npm/team/",
+    }
+    assert secret not in json.dumps([n.properties for n in result.nodes])
+    assert "also-secret" not in json.dumps([n.properties for n in result.nodes])
+    emitted = json.dumps(build_payload(result.nodes, result.edges).to_dict())
+    assert secret not in emitted and "also-secret" not in emitted and "password" not in emitted

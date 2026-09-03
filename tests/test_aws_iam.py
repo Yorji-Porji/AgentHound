@@ -1,6 +1,6 @@
 """Phase 2b — AWS IAM export resolver (real permissions, upload-only).
 
-The ``aws-iam`` collector ingests an ``aws iam get-account-authorization-details``
+The ``aws`` collector ingests an ``aws iam get-account-authorization-details``
 JSON export (a file the operator uploads — AgentHound never calls AWS) and emits
 identities, the resources their policies grant, evidence-based admin flags, and
 CAN_ASSUME edges from role trust policies. Admin-ness comes from policy *content*,
@@ -228,7 +228,7 @@ def test_scope_deny_aws_yields_nothing():
 def test_malformed_export_raises_clickexception(tmp_path: Path):
     bad = tmp_path / "bad.json"
     bad.write_text("{ not valid json")
-    res = CliRunner().invoke(main, ["aws-iam", "-i", str(bad)])
+    res = CliRunner().invoke(main, ["aws", "-i", str(bad)])
     assert res.exit_code != 0
     assert "Could not read AWS IAM export" in res.output
 
@@ -236,14 +236,14 @@ def test_malformed_export_raises_clickexception(tmp_path: Path):
 def test_non_object_root_raises_clickexception(tmp_path: Path):
     bad = tmp_path / "list.json"
     bad.write_text("[1, 2, 3]")
-    res = CliRunner().invoke(main, ["aws-iam", "-i", str(bad)])
+    res = CliRunner().invoke(main, ["aws", "-i", str(bad)])
     assert res.exit_code != 0
     assert "Could not read AWS IAM export" in res.output
 
 
 def test_cli_writes_graph(tmp_path: Path):
     out = tmp_path / "iam_graph.json"
-    res = CliRunner().invoke(main, ["aws-iam", "-i", str(EXAMPLE), "-o", str(out)])
+    res = CliRunner().invoke(main, ["aws", "-i", str(EXAMPLE), "-o", str(out)])
     assert res.exit_code == 0, res.output
     payload = json.loads(out.read_text())
     assert payload["graph"]["nodes"] and payload["graph"]["edges"]

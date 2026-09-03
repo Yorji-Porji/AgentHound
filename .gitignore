@@ -70,13 +70,7 @@ engagement-audit.jsonl
 # Local engagement scope files, host-specific, not part of the project.
 scope.yaml
 
-# Third-party tooling scratch and caches
-.ua/
-
-# Local-only working files, never published. Also listed in .git/info/exclude;
-# duplicated here because that file is not committed and does not survive a
-# fresh clone, so on its own the protection did not travel with the repository.
+# Local-only planning, AI-agent instructions, tooling state, and working files.
+# Keep all personal development artifacts under this one ignored directory.
 .planning/
 local/
-CLAUDE.md
-.claude/

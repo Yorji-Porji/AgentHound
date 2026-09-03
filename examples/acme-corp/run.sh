@@ -42,9 +42,9 @@ if [[ "${KEEP:-0}" == "1" ]]; then echo "==> Keeping artifacts at $WORK"
 else trap 'rm -rf "$WORK"' EXIT; fi
 
 echo "==> Collecting (network-free, from the bundled exports)"
-AH aws-iam    -i "$DATA_DIR/aws_iam.json"    -o "$WORK/aws.json"   >/dev/null
-AH gcp-iam    -i "$DATA_DIR/gcp_iam.json"    -o "$WORK/gcp.json"   >/dev/null
-AH azure-rbac -i "$DATA_DIR/azure_rbac.json" -o "$WORK/azure.json" >/dev/null
+AH aws   -i "$DATA_DIR/aws_iam.json"    -o "$WORK/aws.json"   >/dev/null
+AH gcp   -i "$DATA_DIR/gcp_iam.json"    -o "$WORK/gcp.json"   >/dev/null
+AH azure -i "$DATA_DIR/azure_rbac.json" -o "$WORK/azure.json" >/dev/null
 AH infer "$WORK/aws.json" "$WORK/gcp.json" "$WORK/azure.json" -o "$WORK/merged.json" >/dev/null
 AH emit "$WORK/merged.json" -o "$WORK/acme-bloodhound.json" >/dev/null
 

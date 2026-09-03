@@ -1,5 +1,5 @@
 {
-  "_comment": "Tiny sample Azure RBAC export. Build the real one yourself (network-free): `az role assignment list --all -o json` for roleAssignments and `az role definition list -o json` for roleDefinitions, combined into this shape, then run `agenthound azure-rbac --import <file>`. AgentHound never calls Azure. The Owner service principal is flagged admin from policy content (action '*' with no notActions); Contributor is NOT (its notActions remove access management) even though it also has '*'. Admin comes from the role definition, never from a name. The role-definition GUIDs are the real built-in Owner/Reader/Contributor ids.",
+  "_comment": "Tiny sample Azure RBAC export. Build the real one yourself (network-free): `az role assignment list --all -o json` for roleAssignments and `az role definition list -o json` for roleDefinitions, combined into this shape, then run `agenthound azure --import <file>`. AgentHound never calls Azure. The Owner service principal is flagged admin from policy content (action '*' with no notActions); Contributor is NOT (its notActions remove access management) even though it also has '*'. Admin comes from the role definition, never from a name. The role-definition GUIDs are the real built-in Owner/Reader/Contributor ids.",
   "roleAssignments": [
     {
       "principalId": "11111111-1111-1111-1111-111111111111",

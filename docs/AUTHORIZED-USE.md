@@ -58,21 +58,26 @@ A run can be gated by a scope file (`--scope scope.yaml`). The scope declares:
 - `time_windows` — day/time/timezone windows; a run outside the window is
   refused and audited.
 
-Out-of-scope detection produces one warning line and a `SKIPPED` audit entry —
-never silent collection.
+Allowed and out-of-scope checks produce signed `ALLOW` and `SKIPPED` audit
+entries respectively; collection is never silent.
 
 ### Tamper-evident audit log (`agenthound/audit.py`)
 
 Every scope decision is written to an append-only JSONL audit log. Each line is
 **HMAC-SHA256 signed** with a per-engagement key (`AGENTHOUND_AUDIT_KEY`) and
-**hash-chained** to the line before it, anchored at a fixed genesis hash. Any
-edit, deletion, or reordering breaks the chain.
+**hash-chained** to the line before it, anchored at a fixed genesis hash. An
+edit, insertion, interior deletion, or reordering breaks the chain.
 
 - There is **no unsigned mode** — the log refuses to write without a key.
-- `agenthound verify-audit <file>` re-walks the chain and reports the first
+- `agenthound va <file>` (or `agenthound verify-audit <file>`) re-walks the chain and reports the first
   tampered line.
-- A corrupt or truncated log makes a resuming run **refuse**, not silently
-  start a fresh chain.
+- A malformed, altered, wrong-key, or internally broken log makes a resuming
+  run **refuse**, not silently append from an unverified hash.
+
+The chain authenticates the sequence that is present. It cannot detect valid
+suffix truncation — including truncation to an empty log — unless the verifier
+also has an independently retained terminal hash or receipt. AgentHound does
+not create that external anchor in this release.
 
 This gives an engagement a defensible, court-legible record of exactly what the
 tool was permitted to do and when — chain-of-custody for automated recon.
@@ -81,7 +86,9 @@ tool was permitted to do and when — chain-of-custody for automated recon.
 
 The local collector's parsers (`_aws_profile_names`, `_gh_hosts`,
 `_ssh_pubkeys`, `_kube_contexts`, `_npmrc_registries`) return only identifiers
-and metadata — profile names, hostnames, public-key *filenames*, context names.
+and metadata — profile names, secret-free registry endpoints, hostnames,
+public-key *filenames*, and context names. npm URL userinfo, query strings, and
+fragments are stripped before an identifier is emitted.
 The test `test_no_credential_values_emitted` enforces this and must never
 regress. AgentHound maps the graph; it does not collect the secrets.
 

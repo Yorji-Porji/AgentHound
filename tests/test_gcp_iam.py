@@ -1,6 +1,6 @@
 """GCP IAM policy resolver (real permissions, upload-only).
 
-The ``gcp-iam`` collector ingests a ``gcloud asset search-all-iam-policies`` JSON
+The ``gcp`` collector ingests a ``gcloud asset search-all-iam-policies`` JSON
 export (a file the operator uploads — AgentHound never calls GCP) and emits
 members as NHIs, the resources their bindings grant, evidence-based admin flags
 (``roles/owner``), and ``CAN_ASSUME`` edges for service-account impersonation.
@@ -228,7 +228,7 @@ def test_scope_deny_gcp_yields_nothing():
 def test_malformed_export_raises_clickexception(tmp_path: Path):
     bad = tmp_path / "bad.json"
     bad.write_text("{ not valid json")
-    res = CliRunner().invoke(main, ["gcp-iam", "-i", str(bad)])
+    res = CliRunner().invoke(main, ["gcp", "-i", str(bad)])
     assert res.exit_code != 0
     assert "Could not read GCP IAM export" in res.output
 
@@ -236,14 +236,14 @@ def test_malformed_export_raises_clickexception(tmp_path: Path):
 def test_non_container_root_raises_clickexception(tmp_path: Path):
     bad = tmp_path / "scalar.json"
     bad.write_text("42")
-    res = CliRunner().invoke(main, ["gcp-iam", "-i", str(bad)])
+    res = CliRunner().invoke(main, ["gcp", "-i", str(bad)])
     assert res.exit_code != 0
     assert "Could not read GCP IAM export" in res.output
 
 
 def test_cli_writes_graph(tmp_path: Path):
     out = tmp_path / "gcp_graph.json"
-    res = CliRunner().invoke(main, ["gcp-iam", "-i", str(EXAMPLE), "-o", str(out)])
+    res = CliRunner().invoke(main, ["gcp", "-i", str(EXAMPLE), "-o", str(out)])
     assert res.exit_code == 0, res.output
     payload = json.loads(out.read_text())
     assert payload["graph"]["nodes"] and payload["graph"]["edges"]

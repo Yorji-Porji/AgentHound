@@ -15,7 +15,8 @@ Security posture: the tarball is **untrusted input**. A malicious archive can
 try to write outside the extraction root via absolute paths, ``..`` traversal,
 or links whose target escapes the root (the classic "tarbomb"). Every member is
 validated *before* anything is written; the first unsafe member aborts the
-extraction with :class:`UnsafeArchiveError`.
+extraction with :class:`UnsafeArchiveError`. Member count, individual file size,
+and total expanded data are bounded to resist archive resource exhaustion.
 """
 
 from __future__ import annotations
@@ -26,6 +27,10 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from shutil import rmtree
+
+MAX_ARCHIVE_MEMBERS = 10_000
+MAX_ARCHIVE_TOTAL_SIZE = 1024**3
+MAX_ARCHIVE_MEMBER_SIZE = 256 * 1024**2
 
 
 class UnsafeArchiveError(Exception):
@@ -56,7 +61,11 @@ def _assert_safe(member: tarfile.TarInfo, dest: Path) -> None:
         raise UnsafeArchiveError(f"path escapes extraction root: {name!r}")
 
     if member.issym() or member.islnk():
-        link_target = target.parent / member.linkname
+        link_target = (
+            target.parent / member.linkname
+            if member.issym()
+            else dest / member.linkname
+        )
         if not _within(dest, link_target):
             raise UnsafeArchiveError(
                 f"link escapes extraction root: {name!r} -> {member.linkname!r}"
@@ -64,16 +73,37 @@ def _assert_safe(member: tarfile.TarInfo, dest: Path) -> None:
 
 
 def _safe_extractall(tar: tarfile.TarFile, dest: Path) -> None:
-    """Validate every member, then extract into ``dest``."""
-    for member in tar.getmembers():
+    """Validate bounded member metadata, then extract only that member list."""
+    members: list[tarfile.TarInfo] = []
+    total_size = 0
+    for member in tar:
+        if len(members) >= MAX_ARCHIVE_MEMBERS:
+            raise UnsafeArchiveError(
+                f"archive exceeds the {MAX_ARCHIVE_MEMBERS:,}-member limit"
+            )
+        if not (member.isfile() or member.isdir() or member.issym() or member.islnk()):
+            raise UnsafeArchiveError(f"unsupported archive member type: {member.name!r}")
+        if member.size < 0:
+            raise UnsafeArchiveError(f"archive member has a negative size: {member.name!r}")
+        if member.size > MAX_ARCHIVE_MEMBER_SIZE:
+            raise UnsafeArchiveError(
+                f"archive member exceeds the {MAX_ARCHIVE_MEMBER_SIZE:,}-byte limit: "
+                f"{member.name!r}"
+            )
+        total_size += member.size
+        if total_size > MAX_ARCHIVE_TOTAL_SIZE:
+            raise UnsafeArchiveError(
+                f"archive exceeds the {MAX_ARCHIVE_TOTAL_SIZE:,}-byte expanded-data limit"
+            )
         _assert_safe(member, dest)
+        members.append(member)
     # ``filter='data'`` (Python 3.12+, backported to 3.11.4+) is defense in
     # depth on top of the pre-validation above. Fall back for runtimes that
     # predate the keyword.
     try:
-        tar.extractall(dest, filter="data")  # type: ignore[call-arg]
+        tar.extractall(dest, members=members, filter="data")  # type: ignore[call-arg]
     except TypeError:  # pragma: no cover — Python < 3.11.4 lacks the filter kwarg
-        tar.extractall(dest)  # members already validated by _assert_safe
+        tar.extractall(dest, members=members)  # members already validated
 
 
 @contextmanager

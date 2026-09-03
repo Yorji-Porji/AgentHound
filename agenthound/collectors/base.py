@@ -46,8 +46,8 @@ class Collector(ABC):
     Scope enforcement is opt-in: when ``guard`` is ``None`` every check passes
     and nothing is audited, so unscoped runs behave exactly as before. When a
     guard is attached, subclasses call :meth:`allow_provider` / :meth:`allow_path`
-    before touching a provider or filesystem path; an out-of-scope target yields
-    a ``SKIPPED`` audit entry and no node/edge.
+    before touching a provider or filesystem path; every decision is audited and
+    an out-of-scope target yields no node/edge.
     """
 
     def __init__(
@@ -66,23 +66,31 @@ class Collector(ABC):
     # -- Scope enforcement helpers --------------------------------------------
 
     def allow_provider(self, provider: str, target: str) -> bool:
-        """True if ``provider`` is in scope. Audits a SKIP when it is not."""
+        """True if ``provider`` is in scope. Audit either outcome."""
         if self.guard is None:
             return True
         if self.guard.check_provider(provider):
+            self._audit_decision(
+                "collect", target, "ALLOW", f"provider '{provider}' in scope"
+            )
             return True
-        self._audit_skip("collect", target, f"provider '{provider}' out of scope")
+        self._audit_decision(
+            "collect", target, "SKIPPED", f"provider '{provider}' out of scope"
+        )
         return False
 
     def allow_path(self, path: str | Path, target: str) -> bool:
-        """True if ``path`` is not denied by scope. Audits a SKIP when it is."""
+        """True if ``path`` is not denied by scope. Audit either outcome."""
         if self.guard is None:
             return True
         if self.guard.check_path(path):
+            self._audit_decision("collect", target, "ALLOW", f"path '{path}' in scope")
             return True
-        self._audit_skip("collect", target, f"path '{path}' out of scope")
+        self._audit_decision(
+            "collect", target, "SKIPPED", f"path '{path}' out of scope"
+        )
         return False
 
-    def _audit_skip(self, op: str, target: str, reason: str) -> None:
+    def _audit_decision(self, op: str, target: str, decision: str, reason: str) -> None:
         if self.audit is not None:
-            self.audit.record(op, target, "SKIPPED", reason)
+            self.audit.record(op, target, decision, reason)

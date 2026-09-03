@@ -216,6 +216,23 @@ def _activate_scope(
     return guard, audit
 
 
+def _allow_scoped_path(
+    guard: ScopeGuard | None,
+    audit: AuditLog | None,
+    path: Path,
+    target: str,
+) -> bool:
+    """Apply and audit a CLI-level path gate before reading the target."""
+    if guard is None:
+        return True
+    allowed = guard.check_path(path)
+    if audit is not None:
+        decision = "ALLOW" if allowed else "SKIPPED"
+        state = "in scope" if allowed else "out of scope"
+        audit.record("collect", target, decision, f"path '{path}' {state}")
+    return allowed
+
+
 def _emit_import_collector(
     collector_cls: type,
     error_cls: type[Exception],
@@ -228,7 +245,7 @@ def _emit_import_collector(
     """Shared body for the upload-only cloud-export subcommands.
 
     Activates scope, runs the collector, and turns the expected read/parse errors
-    into a clean ClickException. Identical across aws-iam / gcp-iam / azure-rbac,
+    into a clean ClickException. Identical across aws / gcp / azure,
     differing only in the collector class, its export-error type, and the human
     ``label`` in the failure message.
     """
@@ -329,6 +346,10 @@ def cmd_offline(
     For a host you ARE on, use `local` (or `local --home DIR`).
     """
     guard, audit = _activate_scope(scope)
+    if not _allow_scoped_path(guard, audit, archive, f"offline:{archive}"):
+        raise click.ClickException(
+            f"Archive path '{archive}' is out of scope; refusing to read it."
+        )
     try:
         with extracted_home(archive) as home:
             collector = LocalCollector(
@@ -364,7 +385,7 @@ def cmd_mcp(inventory: Path, output: Path | None, no_branding: bool, scope: Path
     _write_result(collector.collect(), output, strip_branding=no_branding)
 
 
-@main.command("aws-iam")
+@main.command("aws")
 @click.option(
     "--import", "-i", "import_path",
     type=click.Path(path_type=Path, exists=True), required=True,
@@ -394,7 +415,7 @@ def cmd_aws_iam(
     )
 
 
-@main.command("gcp-iam")
+@main.command("gcp")
 @click.option(
     "--import", "-i", "import_path",
     type=click.Path(path_type=Path, exists=True), required=True,
@@ -425,7 +446,7 @@ def cmd_gcp_iam(
     )
 
 
-@main.command("azure-rbac")
+@main.command("azure")
 @click.option(
     "--import", "-i", "import_path",
     type=click.Path(path_type=Path, exists=True), required=True,
@@ -488,15 +509,8 @@ def cmd_emit(input_path: Path, output: Path | None, no_branding: bool) -> None:
         )
 
 
-@main.command("verify-audit")
-@click.argument("path", type=click.Path(path_type=Path, exists=True))
-def cmd_verify_audit(path: Path) -> None:
-    """Verify the HMAC hash-chain of an audit log written during a run.
-
-    Reads the signing key from the AGENTHOUND_AUDIT_KEY environment variable —
-    the same key the run used. Exits non-zero and names the first broken line
-    if the log was edited, truncated, or reordered.
-    """
+def _verify_audit(path: Path) -> None:
+    """Shared implementation for the canonical command and legacy alias."""
     key = os.environ.get(AUDIT_KEY_ENV, "")
     if not key:
         raise click.ClickException(
@@ -507,6 +521,26 @@ def cmd_verify_audit(path: Path) -> None:
         click.echo(f"AUDIT OK: {message} ({path}).")
         return
     raise click.ClickException(f"AUDIT TAMPERED at line {bad_index}: {message} ({path}).")
+
+
+@main.command("va")
+@click.argument("path", type=click.Path(path_type=Path, exists=True))
+def cmd_verify_audit(path: Path) -> None:
+    """Verify the HMAC hash-chain of an audit log written during a run.
+
+    Reads the signing key from the AGENTHOUND_AUDIT_KEY environment variable —
+    the same key the run used. Exits non-zero and names the first broken line
+    if the log was edited, internally truncated, or reordered. A valid suffix
+    removal requires an independently retained terminal hash to detect.
+    """
+    _verify_audit(path)
+
+
+@main.command("verify-audit", hidden=True)
+@click.argument("path", type=click.Path(path_type=Path, exists=True))
+def cmd_verify_audit_legacy(path: Path) -> None:
+    """Backward-compatible alias for `agenthound va`."""
+    _verify_audit(path)
 
 
 if __name__ == "__main__":

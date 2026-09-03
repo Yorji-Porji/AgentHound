@@ -4,6 +4,26 @@ Notable changes to AgentHound. The format is loosely based on
 [Keep a Changelog](https://keepachangelog.com/). AgentHound is in **alpha** —
 the graph schema and CLI surface may change between releases.
 
+## [Unreleased]
+
+### Changed
+
+- Shorten the cloud collector commands to `agenthound aws`, `agenthound gcp`,
+  and `agenthound azure`. Add `agenthound va` as a concise alias for the
+  backward-compatible, hidden `agenthound verify-audit` command.
+
+### Fixed
+
+- Strip npm registry URL credentials, query strings, and fragments before
+  emitting registry identities.
+- Enforce provider/path scope before collector inputs are read, including nested
+  MCP providers, and audit both allowed and skipped decisions.
+- Correct overnight time-window day ownership and recheck authorization expiry.
+- Verify existing audit chains before append and accurately document the
+  external-anchor requirement for detecting valid suffix truncation.
+- Fail soft on malformed MCP inventory shapes, bound offline archive extraction,
+  and require `setup.ps1 -Recreate` targets to be verified virtual environments.
+
 ## [0.2.3] - 2026-08-21
 
 ### Added

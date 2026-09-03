@@ -170,6 +170,38 @@ def test_resume_corrupt_log_raises(tmp_path: Path):
         AuditLog(path, "key")
 
 
+def test_resume_tampered_hmac_refuses(tmp_path: Path):
+    path = _three_line_log(tmp_path)
+    lines = path.read_text().splitlines()
+    entry = json.loads(lines[1])
+    entry["reason"] = "tampered"
+    lines[1] = json.dumps(entry)
+    path.write_text("\n".join(lines) + "\n")
+    with pytest.raises(AuditError, match="failed verification at line 1"):
+        AuditLog(path, "key")
+
+
+def test_resume_with_wrong_key_refuses(tmp_path: Path):
+    path = tmp_path / "a.jsonl"
+    AuditLog(path, "right-key").record("op", "t", "ALLOW", "first")
+    with pytest.raises(AuditError, match="failed verification at line 0"):
+        AuditLog(path, "wrong-key")
+
+
+def test_verify_rejects_scalar_json_line(tmp_path: Path):
+    path = tmp_path / "a.jsonl"
+    path.write_text('"not-an-object"\n')
+    ok, idx, msg = verify_audit_log(path, "key")
+    assert not ok and idx == 0 and "object" in msg
+
+
+def test_valid_suffix_truncation_is_documented_limit(tmp_path: Path):
+    path = _three_line_log(tmp_path)
+    path.write_text("\n".join(path.read_text().splitlines()[:2]) + "\n")
+    ok, idx, msg = verify_audit_log(path, "key")
+    assert ok and idx is None and msg == "audit chain verified"
+
+
 def test_verify_rejects_added_field(tmp_path: Path):
     # F11: a field added to a line is not covered by the signature; verify must
     # still reject it (a genuine line carries exactly the body fields + hash).
